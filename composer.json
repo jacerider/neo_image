@@ -1,0 +1,25 @@
+{
+  "name": "jacerider/neo_image",
+  "description": "Improved responsive image handler along with other image enhancements.",
+  "type": "drupal-module",
+  "license": "proprietary",
+  "homepage": "https://github.com/jacerider/neo_image",
+  "authors": [
+    {
+      "name": "Cyle Carlson (JaceRider)",
+      "email": "jacerider@gmail.com",
+      "role": "Maintainer"
+    }
+  ],
+  "support": {
+    "issues": "https://github.com/jacerider/neo_image/issues",
+    "source": "https://github.com/jacerider/neo_image"
+  },
+  "minimum-stability": "dev",
+  "require": {
+    "drupal/core": "^10.3",
+    "drupal/webp": "^1",
+    "jacerider/neo": "^1",
+    "jacerider/neo_settings": "^1"
+  }
+}

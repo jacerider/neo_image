@@ -1,0 +1,16 @@
+dimensions:
+  sm:
+    width: 640
+    height: ''
+  md:
+    width: ''
+    height: ''
+  lg:
+    width: ''
+    height: ''
+  xl:
+    width: ''
+    height: ''
+  2xl:
+    width: ''
+    height: ''

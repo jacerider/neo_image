@@ -1,0 +1,15 @@
+services:
+  neo_image.route_alter:
+    class: \Drupal\neo_image\Routing\RouteSubscriber
+    tags:
+      - { name: event_subscriber }
+  neo_image.param_converter:
+    class: Drupal\neo_image\Routing\NeoImageStyleConverter
+    tags:
+      - { name: paramconverter }
+  neo_image.settings:
+    parent: neo_settings.repository
+    arguments: ['neo_image']
+  neo_image.style_manager:
+    class: Drupal\neo_image\NeoImageStyleManager
+    arguments: ['@stream_wrapper_manager', '@file_system']

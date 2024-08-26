@@ -1,0 +1,250 @@
+<?php
+
+/**
+ * @file
+ * Primary module hooks for Neo Image module.
+ */
+
+use Drupal\Core\StreamWrapper\StreamWrapperInterface;
+use Drupal\Core\Template\Attribute;
+use Drupal\neo_image\NeoImage;
+use Drupal\neo_image\NeoImageStyle;
+
+/**
+ * Implements hook_theme().
+ */
+function neo_image_theme() {
+  return [
+    'neo_image' => [
+      'variables' => [
+        'neoImage' => NULL,
+        'alt' => NULL,
+        'title' => NULL,
+        'attributes' => [],
+      ],
+    ],
+    // Theme functions in image.module.
+    'neo_image_style' => [
+      'variables' => [
+        'neoImageStyle' => NULL,
+        'uri' => NULL,
+        'alt' => NULL,
+        'title' => NULL,
+        'attributes' => [],
+      ],
+    ],
+  ];
+}
+
+/**
+ * Prepares variables for a responsive image.
+ *
+ * Default template: responsive-image.html.twig.
+ *
+ * @param array $variables
+ *   An associative array containing:
+ *   - neoImage: The Neo image.
+ *   - alt: The alternative text for text-based browsers. HTML 4 and XHTML 1.0
+ *     always require an alt attribute. The HTML 5 draft allows the alt
+ *     attribute to be omitted in some cases. Therefore, this variable defaults
+ *     to an empty string, but can be set to NULL for the attribute to be
+ *     omitted. Usually, neither omission nor an empty string satisfies
+ *     accessibility requirements, so it is strongly encouraged for code using
+ *     '#theme' => 'neo_image' to pass a meaningful value for this variable.
+ *     - http://www.w3.org/TR/REC-html40/struct/objects.html#h-13.8
+ *     - http://www.w3.org/TR/xhtml1/dtds.html
+ *     - http://dev.w3.org/html5/spec/Overview.html#alt
+ *   - title: The title text is displayed when the image is hovered in some
+ *     popular browsers.
+ *   - attributes: Associative array of additional attributes to be placed in
+ *     the img tag.
+ */
+function template_preprocess_neo_image(&$variables) {
+  $neoImage = $variables['neoImage'];
+  $sources = [];
+  if ($neoImage instanceof NeoImage) {
+    $file = $neoImage->getFile();
+    $fileUri = $file->getFileUri();
+    /** @var \Drupal\Core\Image\Image $image */
+    $image = \Drupal::service('image.factory')->get($fileUri);
+    $width = $image->getWidth();
+    $height = $image->getHeight();
+    $type = $image->getMimeType();
+
+    $neoImageStyles = array_reverse($neoImage->getStyles());
+    $styleCount = count($neoImageStyles);
+    $lastSize = array_key_last($neoImageStyles);
+
+    $variables['output_image_tag'] = $styleCount === 1;
+    foreach ($neoImageStyles as $size => $neoImageStyle) {
+      if ($size === $lastSize) {
+        $variables['img_element'] = $neoImageStyle->toRenderable($file, $variables['alt'], $variables['title']);
+      }
+      else {
+        $imageStyle = $neoImageStyle->getImageStyle();
+        $imageUri = $imageStyle->buildUrl($fileUri);
+        $dimensions = [
+          'width' => $width,
+          'height' => $height,
+        ];
+        $imageStyle->transformDimensions($dimensions, $fileUri);
+        $attribute = new Attribute();
+        $attribute->setAttribute('media', $neoImage->getMediaQuery($size));
+        $attribute->setAttribute('srcset', $imageUri);
+        $attribute->setAttribute('type', $type);
+        $attribute->setAttribute('width', $dimensions['width']);
+        $attribute->setAttribute('height', $dimensions['height']);
+
+        // Add WebP source if available.
+        if (\Drupal::hasService('webp.webp')) {
+          $webp = \Drupal::service('webp.webp');
+          $webpUri = $webp->getWebpSrcset($imageUri);
+          if ($imageUri !== $webpUri) {
+            // Never output a single image tag, because
+            // we will always have at least two sources.
+            $variables['output_image_tag'] = FALSE;
+            $webpAttribute = clone $attribute;
+            $webpAttribute->offsetSet('srcset', $webpUri);
+            $webpAttribute->offsetSet('type', 'image/webp');
+            $sources[$size . 'Webp'] = $webpAttribute;
+          }
+        }
+
+        $sources[$size] = $attribute;
+      }
+    }
+  }
+  $variables['sources'] = $sources;
+}
+
+/**
+ * Prepares variables for image style templates.
+ *
+ * Default template: image-style.html.twig.
+ *
+ * @param array $variables
+ *   An associative array containing:
+ *   - width: The width of the image.
+ *   - height: The height of the image.
+ *   - style_name: The name of the image style to be applied.
+ *   - uri: URI of the source image before styling.
+ *   - alt: The alternative text for text-based browsers. HTML 4 and XHTML 1.0
+ *     always require an alt attribute. The HTML 5 draft allows the alt
+ *     attribute to be omitted in some cases. Therefore, this variable defaults
+ *     to an empty string, but can be set to NULL for the attribute to be
+ *     omitted. Usually, neither omission nor an empty string satisfies
+ *     accessibility requirements, so it is strongly encouraged for code using
+ *     '#theme' => 'neo_image_style' to pass a meaningful value for this
+ *     variable.
+ *     - http://www.w3.org/TR/REC-html40/struct/objects.html#h-13.8
+ *     - http://www.w3.org/TR/xhtml1/dtds.html
+ *     - http://dev.w3.org/html5/spec/Overview.html#alt
+ *   - title: The title text is displayed when the image is hovered in some
+ *     popular browsers.
+ *   - attributes: Associative array of additional attributes to be placed in
+ *     the img tag.
+ */
+function template_preprocess_neo_image_style(&$variables) {
+  /** @var \Drupal\neo_image\NeoImageStyle $neoImageStyle */
+  $neoImageStyle = $variables['neoImageStyle'];
+
+  // Determine the dimensions of the styled image.
+  /** @var \Drupal\Core\Image\Image $image */
+  $image = \Drupal::service('image.factory')->get($variables['uri']);
+  $dimensions = [
+    'width' => $image->getWidth(),
+    'height' => $image->getHeight(),
+  ];
+
+  if ($neoImageStyle->getEffectCount() === 0) {
+    // We do not have any effects. Render raw.
+    $variables['image'] = [
+      '#theme' => 'image',
+      '#width' => $dimensions['width'],
+      '#height' => $dimensions['height'],
+      '#attributes' => $variables['attributes'],
+      '#uri' => $variables['uri'],
+    ];
+  }
+  else {
+    $style = $neoImageStyle->getImageStyle();
+    $style->transformDimensions($dimensions, $variables['uri']);
+
+    $variables['image'] = [
+      '#theme' => 'image',
+      '#width' => $dimensions['width'],
+      '#height' => $dimensions['height'],
+      '#attributes' => $variables['attributes'],
+      '#style_name' => $style->getName(),
+    ];
+
+    // If the current image toolkit supports this file type, prepare the URI for
+    // the derivative image. If not, just use the original image resized to the
+    // dimensions specified by the style.
+    if ($style->supportsUri($variables['uri'])) {
+      $variables['image']['#uri'] = $style->buildUrl($variables['uri']);
+    }
+    else {
+      $variables['image']['#uri'] = $variables['uri'];
+      // Don't render the image by default, but allow other preprocess functions
+      // to override that if they need to.
+      $variables['image']['#access'] = FALSE;
+
+      // Inform the site builders why their image didn't work.
+      \Drupal::logger('image')->warning('Could not apply @style image style to @uri because the style does not support it.', [
+        '@style' => $style->label(),
+        '@uri' => $variables['uri'],
+      ]);
+    }
+  }
+
+  if (\array_key_exists('alt', $variables)) {
+    $variables['image']['#alt'] = $variables['alt'];
+  }
+  if (\array_key_exists('title', $variables)) {
+    $variables['image']['#title'] = $variables['title'];
+  }
+
+}
+
+/**
+ * Implements hook_image_style_flush().
+ */
+function neo_image_image_style_flush($style, $path = NULL) {
+  $path = 'public://2024-05/wallhaven-6dyj26.JPG';
+  if ($path) {
+    /** @var \Drupal\neo_image\NeoImageStyleManager $style_manager */
+    $style_manager = \Drupal::service('neo_image.style_manager');
+    $fileSystem = \Drupal::service('file_system');
+    $wrappers = \Drupal::service('stream_wrapper_manager')->getWrappers(StreamWrapperInterface::WRITE_VISIBLE);
+    $styleDirs = array_map(function ($wrapper) {
+      return $wrapper . '://styles';
+    }, array_keys($wrappers));
+    foreach ($style_manager->getStyles() as $neoImageStyle) {
+      $derivativeUri = $neoImageStyle->getImageStyle()->buildUri($path);
+      if (file_exists($derivativeUri)) {
+        $fileSystem->delete($derivativeUri);
+        // Remove WebP source if available.
+        if (\Drupal::hasService('webp.webp')) {
+          $webp = \Drupal::service('webp.webp');
+          $webpUri = $webp->getWebpSrcset($derivativeUri);
+          if ($derivativeUri !== $webpUri && file_exists($webpUri)) {
+            $fileSystem->delete($webpUri);
+          }
+        }
+      }
+      $directory = $fileSystem->dirname($derivativeUri);
+      while (!in_array($directory, $styleDirs)) {
+        if (file_exists($directory) && is_dir($directory)) {
+          $files = $fileSystem->scanDirectory($directory, '/.*/', ['recurse' => FALSE]);
+          if (empty($files)) {
+            $fileSystem->deleteRecursive($directory);
+          }
+        }
+        $parts = explode('/', $directory);
+        array_pop($parts);
+        $directory = implode('/', $parts);
+      }
+    }
+  }
+}
