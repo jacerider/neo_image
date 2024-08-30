@@ -2,7 +2,7 @@ name: 'Neo | Image'
 type: module
 description: 'Improved responsive image handler along with other image enhancements.'
 package: Neo
-version: 0.0.0
+version: 1.0.2
 core_version_requirement: ^10.3 || ^11
 dependencies:
   - drupal:breakpoint
