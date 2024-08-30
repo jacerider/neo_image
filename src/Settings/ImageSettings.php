@@ -161,12 +161,18 @@ final class ImageSettings extends SettingsBase {
       ];
     }
 
+    return $form;
+  }
+
+  /**
+   * {@inheritdoc}
+   */
+  public function buildBaseSettingsForm(array $form, FormStateInterface $form_state) {
     $form['flush'] = [
       '#type' => 'submit',
       '#value' => $this->t('Flush Image Styles'),
       '#submit' => [[$this, 'flushImageStyles']],
     ];
-
     return $form;
   }
 
