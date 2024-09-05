@@ -92,18 +92,23 @@ final class NeoImage implements RenderableInterface {
    *
    * @param \Drupal\media\MediaInterface|\Drupal\file\FileInterface $entity
    *   The media entity.
+   * @param string|null $alt
+   *   The alt text.
+   * @param string|null $title
+   *   The title.
    *
    * @return $this
    */
-  public static function createFromEntity(MediaInterface|FileInterface $entity): static {
-    $alt = NULL;
-    $title = NULL;
+  public static function createFromEntity(MediaInterface|FileInterface $entity, $alt = NULL, $title = NULL): static {
     if ($entity instanceof MediaInterface) {
       /** @var \Drupal\media\MediaInterface $entity */
       $fieldDefinition = $entity->getSource()->getSourceFieldDefinition($entity->bundle->entity);
-      $value = $entity->get($fieldDefinition->getName())->first()->getValue();
-      $alt = $value['alt'] ?: $alt;
-      $title = $value['title'] ?: $title;
+      $value = $entity->get($fieldDefinition->getName())->first()->getValue() + [
+        'alt' => '',
+        'title' => '',
+      ];
+      $alt = $alt ?? $value['title'] ?: NULL;
+      $title = $title ?? $value['title'] ?: NULL;
       $entity = $entity->get('thumbnail')->entity;
       if (!$entity) {
         throw new \InvalidArgumentException('The media entity does not have a thumbnail.');
