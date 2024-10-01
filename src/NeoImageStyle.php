@@ -28,6 +28,7 @@ class NeoImageStyle {
     'r' => 'image_resize',
     's' => 'image_scale',
     'c' => 'image_crop',
+    'cs' => 'image_crop_sides',
     'sc' => 'image_scale_and_crop',
     'f' => 'focal_point_scale_and_crop',
     'fw' => 'focal_point_crop_by_width',
@@ -76,6 +77,33 @@ class NeoImageStyle {
       'rb' => 'right-bottom',
     ],
   ];
+
+  /**
+   * Constructs a new image style.
+   *
+   * @param array $options
+   *   The options.
+   */
+  public function __construct(array $options = []) {
+    if ($options) {
+      $allowed = [
+        'auto',
+        'size',
+        'scale',
+        'scaleCrop',
+        'crop',
+        'cropSides',
+        'focal',
+        'focalWidth',
+      ];
+      foreach ($options as $key => $option) {
+        if (method_exists($this, $key) && in_array($key, $allowed)) {
+          $option = is_array($option) ? $option : [];
+          $this->$key(...$option);
+        }
+      }
+    }
+  }
 
   /**
    * Get image style URL for a media entity.
@@ -183,68 +211,6 @@ class NeoImageStyle {
   }
 
   /**
-   * Set crop.
-   *
-   * @param string|int $width
-   *   The width.
-   * @param string|int $height
-   *   The height.
-   * @param string $anchor
-   *   The anchor.
-   *   Options:
-   *     left-top
-   *     center-top
-   *     right-top
-   *     left-center,
-   *     center-center
-   *     right-center
-   *     left-bottom
-   *     center-bottom
-   *     right-bottom.
-   *
-   * @return $this
-   */
-  public function crop($width, $height, $anchor = 'center-center'):self {
-    $anchorKeys = array_flip($this->valueKeys['a']);
-    if (!isset($anchorKeys[$anchor])) {
-      throw new \InvalidArgumentException('Invalid anchor value.');
-    }
-    $this->parameters['c']['w'] = (int) $width;
-    $this->parameters['c']['h'] = (int) $height;
-    $this->parameters['c']['a'] = $anchorKeys[$anchor];
-    return $this;
-  }
-
-  /**
-   * Set focal point scale and crop.
-   *
-   * @param string|int $width
-   *   The width.
-   * @param string|int $height
-   *   The height.
-   *
-   * @return $this
-   */
-  public function focal($width, $height):self {
-    $this->parameters['f']['w'] = (int) $width;
-    $this->parameters['f']['h'] = (int) $height;
-    return $this;
-  }
-
-  /**
-   * Set focal point by width.
-   *
-   * @param string|int $width
-   *   The width.
-   *
-   * @return $this
-   */
-  public function focalWidth($width):self {
-    $this->parameters['fw']['w'] = (int) $width;
-    return $this;
-  }
-
-  /**
    * Set size.
    *
    * @param string|int $width
@@ -278,6 +244,80 @@ class NeoImageStyle {
   }
 
   /**
+   * Set crop.
+   *
+   * @param string|int $width
+   *   The width.
+   * @param string|int $height
+   *   The height.
+   * @param string $anchor
+   *   The anchor.
+   *   Options:
+   *     left-top
+   *     center-top
+   *     right-top
+   *     left-center,
+   *     center-center
+   *     right-center
+   *     left-bottom
+   *     center-bottom
+   *     right-bottom.
+   *
+   * @return $this
+   */
+  public function crop($width, $height, $anchor = 'center-center'):self {
+    $anchorKeys = array_flip($this->valueKeys['a']);
+    if (!isset($anchorKeys[$anchor])) {
+      throw new \InvalidArgumentException('Invalid anchor value.');
+    }
+    $this->parameters['c']['w'] = (int) $width;
+    $this->parameters['c']['h'] = (int) $height;
+    $this->parameters['c']['a'] = $anchorKeys[$anchor];
+    return $this;
+  }
+
+  /**
+   * Use cropauto on image.
+   *
+   * This will remove transparent edges from the image.
+   *
+   * @return $this
+   */
+  public function cropSides():self {
+    $this->parameters['cs'] = 1;
+    return $this;
+  }
+
+  /**
+   * Set focal point scale and crop.
+   *
+   * @param string|int $width
+   *   The width.
+   * @param string|int $height
+   *   The height.
+   *
+   * @return $this
+   */
+  public function focal($width, $height):self {
+    $this->parameters['f']['w'] = (int) $width;
+    $this->parameters['f']['h'] = (int) $height;
+    return $this;
+  }
+
+  /**
+   * Set focal point by width.
+   *
+   * @param string|int $width
+   *   The width.
+   *
+   * @return $this
+   */
+  public function focalWidth($width):self {
+    $this->parameters['fw']['w'] = (int) $width;
+    return $this;
+  }
+
+  /**
    * Get image style id.
    *
    * @return string
@@ -300,9 +340,11 @@ class NeoImageStyle {
       if (isset($this->effectKeys[$param])) {
         $effect = $this->effectKeys[$param];
         $effects[$effect] = [];
-        foreach ($config as $key => $value) {
-          $property = $this->propertyKeys[$key];
-          $effects[$effect][$property] = $this->valueKeys[$key][$value] ?? $value;
+        if (is_array($config)) {
+          foreach ($config as $key => $value) {
+            $property = $this->propertyKeys[$key];
+            $effects[$effect][$property] = $this->valueKeys[$key][$value] ?? $value;
+          }
         }
       }
     }
@@ -416,10 +458,15 @@ class NeoImageStyle {
     $id = [];
     foreach ($params as $param => $config) {
       $key = [];
-      foreach ($config as $attr => $val) {
-        $key[] = $attr . '-' . $val;
+      if (is_array($config)) {
+        foreach ($config as $attr => $val) {
+          $key[] = $attr . '-' . $val;
+        }
+        $id[] = $param . '--' . implode('_', $key);
       }
-      $id[] = $param . '--' . implode('_', $key);
+      else {
+        $id[] = $param;
+      }
     }
     return 'neo-' . implode('~', $id);
   }
@@ -448,6 +495,9 @@ class NeoImageStyle {
           $params[$type][$prop[0]] = $prop[1];
         }
       }
+      else {
+        $params[$type] = 1;
+      }
     }
     return $params;
   }
@@ -467,7 +517,7 @@ class NeoImageStyle {
    * @return array
    *   The renderable array.
    */
-  public function toRenderable(MediaInterface|FileInterface $entity, $alt = NULL, $title = NULL, $attributes = []):array {
+  public function toRenderableFromEntity(MediaInterface|FileInterface $entity, $alt = NULL, $title = NULL, $attributes = []):array {
     $build = [];
     if ($entity instanceof MediaInterface) {
       /** @var \Drupal\media\MediaInterface $entity */
@@ -487,6 +537,32 @@ class NeoImageStyle {
       ];
     }
     return $build;
+  }
+
+  /**
+   * Render uri as image.
+   *
+   * @param string $uri
+   *   The file URI.
+   * @param string|null $alt
+   *   The alt text.
+   * @param string|null $title
+   *   The title.
+   * @param array $attributes
+   *   The attributes.
+   *
+   * @return array
+   *   The renderable array.
+   */
+  public function toRenderableFromUri(string $uri, $alt = NULL, $title = NULL, $attributes = []):array {
+    return [
+      '#theme' => 'neo_image_style',
+      '#neoImageStyle' => $this,
+      '#uri' => $uri,
+      '#alt' => $alt,
+      '#title' => $title,
+      '#attributes' => $attributes,
+    ];
   }
 
 }

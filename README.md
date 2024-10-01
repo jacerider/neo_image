@@ -64,7 +64,12 @@ Build a dynamic image style that will utilize on-demand effects.
 $entity = \Drupal::entityTypeManager()->getStorage('media')->load(1);
 $neoImageStyle = new NeoImageStyle();
 $neoImageStyle->focal(300, 300);
-$neoImageStyle->toRenderable($entity, 'Alt Text', 'Title Text');
+$neoImageStyle->toRenderableFromEntity($entity, 'Alt Text', 'Title Text');
+
+$uri = 'public://image/image.png';
+$neoImageStyle = new NeoImageStyle();
+$neoImageStyle->focal(300, 300);
+$neoImageStyle->toRenderableFromUri($uri, 'Alt Text', 'Title Text');
 ```
 
 IMAGE STYLE NAMING CONVENTIONS
@@ -80,6 +85,7 @@ style. The style names are such that they are a short as possible and URL-safe.
 | r | image_resize | [w*, h*](#property-conversion) |
 | s | image_scale | [w, h](#property-conversion) |
 | c | image_crop | [w*, h*, a*](#property-conversion) |
+| cs | image_crop_sides | |
 | sc | image_scale_and_crop | [w*, h*, a*](#property-conversion) |
 | f | focal_point_scale_and_crop | [w*, h*](#property-conversion) |
 | fw | focal_point_crop_by_width | [w*](#property-conversion) |

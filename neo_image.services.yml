@@ -13,3 +13,7 @@ services:
   neo_image.style_manager:
     class: Drupal\neo_image\NeoImageStyleManager
     arguments: ['@stream_wrapper_manager', '@file_system']
+  neo_image.twig_extension:
+    class: Drupal\neo_image\TwigExtension
+    tags:
+      - { name: twig.extension, priority: 100 }

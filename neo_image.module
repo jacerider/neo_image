@@ -5,6 +5,7 @@
  * Primary module hooks for Neo Image module.
  */
 
+use Drupal\Component\Utility\UrlHelper;
 use Drupal\Core\StreamWrapper\StreamWrapperInterface;
 use Drupal\Core\Template\Attribute;
 use Drupal\neo_image\NeoImage;
@@ -78,7 +79,7 @@ function template_preprocess_neo_image(&$variables) {
     $variables['output_image_tag'] = $styleCount === 1;
     foreach ($neoImageStyles as $size => $neoImageStyle) {
       if ($size === $lastSize) {
-        $variables['img_element'] = $neoImageStyle->toRenderable($file, $variables['alt'], $variables['title']);
+        $variables['img_element'] = $neoImageStyle->toRenderableFromEntity($file, $variables['alt'], $variables['title']);
       }
       else {
         $imageStyle = $neoImageStyle->getImageStyle();
@@ -147,6 +148,23 @@ function template_preprocess_neo_image(&$variables) {
 function template_preprocess_neo_image_style(&$variables) {
   /** @var \Drupal\neo_image\NeoImageStyle $neoImageStyle */
   $neoImageStyle = $variables['neoImageStyle'];
+
+  if (UrlHelper::isExternal($variables['uri'])) {
+    $style = $neoImageStyle->getImageStyle();
+    $dimensions = [
+      'width' => 10000,
+      'height' => 10000,
+    ];
+    $style->transformDimensions($dimensions, $variables['uri']);
+    $variables['image'] = [
+      '#theme' => 'image',
+      '#width' => $dimensions['width'] !== 10000 ? $dimensions['width'] : NULL,
+      '#height' => $dimensions['height'] !== 10000 ? $dimensions['height'] : NULL,
+      '#attributes' => $variables['attributes'],
+      '#uri' => $variables['uri'],
+    ];
+    return;
+  }
 
   // Determine the dimensions of the styled image.
   /** @var \Drupal\Core\Image\Image $image */
