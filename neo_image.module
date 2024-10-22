@@ -166,6 +166,9 @@ function template_preprocess_neo_image_style(&$variables) {
     return;
   }
 
+  // Convert the URI to a stream wrapper URI.
+  $variables['uri'] = str_replace('/sites/default/files/', 'public://', $variables['uri']);
+
   // Determine the dimensions of the styled image.
   /** @var \Drupal\Core\Image\Image $image */
   $image = \Drupal::service('image.factory')->get($variables['uri']);
