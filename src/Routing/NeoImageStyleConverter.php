@@ -7,7 +7,6 @@ namespace Drupal\neo_image\Routing;
 use Drupal\Core\ParamConverter\ParamConverterInterface;
 use Drupal\image\Entity\ImageStyle;
 use Drupal\neo_image\NeoImageStyle;
-use Symfony\Component\HttpKernel\Exception\AccessDeniedHttpException;
 use Symfony\Component\Routing\Route;
 
 /**
@@ -27,12 +26,8 @@ class NeoImageStyleConverter implements ParamConverterInterface {
     elseif (substr($value, 0, 4) === 'neo-') {
       $neoImageStyle = new NeoImageStyle();
       $neoImageStyle->setParameters($neoImageStyle->convertIdToParams($value));
-      // parse_str(base64_decode(strtr(substr($value, 4), '-_.', '+/=')), $params);
-      // $neoImageStyle = new NeoImageStyle();
-      // $neoImageStyle->setParameters($params);
       return $neoImageStyle->getImageStyle();
     }
-
     return NULL;
   }
 
