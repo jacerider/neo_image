@@ -16,7 +16,7 @@ use Symfony\Component\DependencyInjection\ContainerInterface;
  *
  * @Settings(
  *   id = "neo_image",
- *   label = @Translation("Neo Image"),
+ *   label = @Translation("Image"),
  *   config_name = "neo_image.settings",
  *   menu_title = @Translation("Image"),
  *   route = "/admin/config/neo/neo-image",
