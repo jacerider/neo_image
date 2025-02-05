@@ -4,6 +4,7 @@ CONTENTS OF THIS FILE
  * Introduction
  * Requirements
  * Installation
+ * Twig
  * Responsive Image Generator
  * Image Style Generator
  * Image Style Naming Conventions
@@ -28,6 +29,39 @@ INSTALLATION
 
 Install as you would normally install a contributed Drupal module. Visit
 https://www.drupal.org/node/1897420 for further information.
+
+
+TWIG
+----
+
+There are 3 twig helpers available:
+
+## Single image
+
+```twig
+
+<!-- Auto will scale if only width or height is provided. Will focus crop if with and height are provided. -->
+{{ neo_image_style(src, {auto: {width: 100}}, alt) }}
+<!-- Exact will scale the image to width or height (whichever is greater) and then set the image to the width/height provided. -->
+{{ neo_image_style(src, {exact: {width: 100, height: 100}}, alt) }}
+<!-- Available size ops are: auto, size, scale, scaleCrop, crop, focal, focalWidth, exact. -->
+{{ neo_image_style(src, {scale: {width: 100}}, alt) }}
+{{ neo_image_style(src, {scaleCrop: {width: 100, height: 100}}, alt) }}
+<!-- You can also provide a file or media entity directly -->
+{{ neo_image_style(entity, {scale: {width: 100}}) }}
+
+```
+
+## Responsive image
+
+```twig
+
+<!-- Available size ops are: auto, size, scale, scaleCrop, crop, focal, focalWidth, exact. -->
+{{ neo_image(src, {sm: {op: 'exact', width: 100, height: 100}, md: {op: 'exact', width: 200, height: 200}}, alt) }}
+<!-- You can also provide a file or media entity directly -->
+{{ neo_image(entity, {sm: {op: 'exact', width: 100, height: 100}, md: {op: 'exact', width: 200, height: 200}}, alt) }}
+
+```
 
 
 RESPONSIVE IMAGE GENERATOR
@@ -89,6 +123,7 @@ style. The style names are such that they are a short as possible and URL-safe.
 | sc | image_scale_and_crop | [w*, h*, a*](#property-conversion) |
 | f | focal_point_scale_and_crop | [w*, h*](#property-conversion) |
 | fw | focal_point_crop_by_width | [w*](#property-conversion) |
+| e | exact | [w, h, a*](#property-conversion) |
 
 ## Property Conversion
 

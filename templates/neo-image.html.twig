@@ -18,13 +18,13 @@
 {% if output_image_tag %}
   {{ img_element }}
 {% else %}
-  <picture>
+  <picture{{ attributes }}>
     {% if sources %}
       {% for source_attributes in sources %}
         <source{{ source_attributes }}/>
       {% endfor %}
     {% endif %}
     {# The controlling image, with the fallback image in srcset. #}
-    {{ img_element }}
+    {{ img_element|neo_attributes(attributes) }}
   </picture>
 {% endif %}

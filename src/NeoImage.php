@@ -12,11 +12,11 @@ use Drupal\media\MediaInterface;
 final class NeoImage implements RenderableInterface {
 
   /**
-   * The file.
+   * The URI.
    *
-   * @var \Drupal\file\FileInterface
+   * @var string
    */
-  protected FileInterface $file;
+  protected string $uri;
 
   /**
    * The alt text.
@@ -80,8 +80,8 @@ final class NeoImage implements RenderableInterface {
   /**
    * Constructs a new Image object.
    */
-  public function __construct(FileInterface $file, $alt = NULL, $title = NULL) {
-    $this->file = $file;
+  public function __construct(string $uri, $alt = NULL, $title = NULL) {
+    $this->uri = $uri;
     $this->alt = $alt;
     $this->title = $title;
     $this->styles['sm'] = new NeoImageStyle();
@@ -114,17 +114,17 @@ final class NeoImage implements RenderableInterface {
         throw new \InvalidArgumentException('The media entity does not have a thumbnail.');
       }
     }
-    return new static($entity, $alt, $title);
+    return new static($entity->getFileUri(), $alt, $title);
   }
 
   /**
-   * Get file.
+   * Get uri.
    *
-   * @return \Drupal\file\FileInterface
-   *   The file.
+   * @return string
+   *   The uri.
    */
-  public function getFile():FileInterface {
-    return $this->file;
+  public function getUri():string {
+    return $this->uri;
   }
 
   /**
@@ -176,12 +176,26 @@ final class NeoImage implements RenderableInterface {
       $settings += [
         'width' => '',
         'height' => '',
+        'achor' => '',
+        'op' => 'auto',
       ];
-      if (empty(array_filter($settings))) {
-        continue;
-      }
       $style = $this->getStyle($size);
-      $style->auto($settings['width'], $settings['height']);
+      if (method_exists($style, $settings['op'])) {
+        $refObj = new \ReflectionObject($style);
+        $method = $refObj->getMethod($settings['op']);
+        $params = [];
+        foreach ($method->getParameters() as $param) {
+          $name = $param->getName();
+          if (isset($settings[$name])) {
+            $params[$name] = $settings[$name];
+          }
+        }
+        if (empty(array_filter($params))) {
+          $this->clearStyle($size);
+          continue;
+        }
+        $style->{$settings['op']}(...$params);
+      }
     }
     return $this;
   }
@@ -321,16 +335,19 @@ final class NeoImage implements RenderableInterface {
    *   The alt text.
    * @param string|null $title
    *   The title.
+   * @param array $attributes
+   *   The attributes.
    *
    * @return array
    *   The renderable array.
    */
-  public function toRenderable($alt = NULL, $title = NULL):array {
+  public function toRenderable($alt = NULL, $title = NULL, $attributes = []):array {
     return [
       '#theme' => 'neo_image',
       '#neoImage' => $this,
       '#title' => $alt ?? $this->title,
       '#alt' => $title ?? $this->alt,
+      '#attributes' => $attributes,
     ];
   }
 

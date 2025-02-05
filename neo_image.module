@@ -64,10 +64,9 @@ function template_preprocess_neo_image(&$variables) {
   $neoImage = $variables['neoImage'];
   $sources = [];
   if ($neoImage instanceof NeoImage) {
-    $file = $neoImage->getFile();
-    $fileUri = $file->getFileUri();
+    $uri = $neoImage->getUri();
     /** @var \Drupal\Core\Image\Image $image */
-    $image = \Drupal::service('image.factory')->get($fileUri);
+    $image = \Drupal::service('image.factory')->get($uri);
     $width = $image->getWidth();
     $height = $image->getHeight();
     $type = $image->getMimeType();
@@ -79,16 +78,16 @@ function template_preprocess_neo_image(&$variables) {
     $variables['output_image_tag'] = $styleCount === 1;
     foreach ($neoImageStyles as $size => $neoImageStyle) {
       if ($size === $lastSize) {
-        $variables['img_element'] = $neoImageStyle->toRenderableFromEntity($file, $variables['alt'], $variables['title']);
+        $variables['img_element'] = $neoImageStyle->toRenderableFromUri($uri, $variables['alt'], $variables['title']);
       }
       else {
         $imageStyle = $neoImageStyle->getImageStyle();
-        $imageUri = $imageStyle->buildUrl($fileUri);
+        $imageUri = $imageStyle->buildUrl($uri);
         $dimensions = [
           'width' => $width,
           'height' => $height,
         ];
-        $imageStyle->transformDimensions($dimensions, $fileUri);
+        $imageStyle->transformDimensions($dimensions, $uri);
         $attribute = new Attribute();
         $attribute->setAttribute('media', $neoImage->getMediaQuery($size));
         $attribute->setAttribute('srcset', $imageUri);
@@ -97,7 +96,8 @@ function template_preprocess_neo_image(&$variables) {
         $attribute->setAttribute('height', $dimensions['height']);
 
         // Add WebP source if available.
-        if (\Drupal::hasService('webp.webp')) {
+        // We now force WebP on the actual image style.
+        if (\Drupal::hasService('webp.webp') && FALSE) {
           $webp = \Drupal::service('webp.webp');
           $webpUri = $webp->getWebpSrcset($imageUri);
           if ($imageUri !== $webpUri) {
@@ -148,8 +148,9 @@ function template_preprocess_neo_image(&$variables) {
 function template_preprocess_neo_image_style(&$variables) {
   /** @var \Drupal\neo_image\NeoImageStyle $neoImageStyle */
   $neoImageStyle = $variables['neoImageStyle'];
+  $uri = str_replace('/sites/default/files/', 'public://', $variables['uri']);
 
-  if (UrlHelper::isExternal($variables['uri'])) {
+  if (NeoImageStyle::isExternalUri($uri)) {
     $style = $neoImageStyle->getImageStyle();
     $dimensions = [
       'width' => 10000,
@@ -171,7 +172,7 @@ function template_preprocess_neo_image_style(&$variables) {
 
   // Determine the dimensions of the styled image.
   /** @var \Drupal\Core\Image\Image $image */
-  $image = \Drupal::service('image.factory')->get($variables['uri']);
+  $image = \Drupal::service('image.factory')->get($uri);
   $dimensions = [
     'width' => $image->getWidth(),
     'height' => $image->getHeight(),
@@ -184,12 +185,12 @@ function template_preprocess_neo_image_style(&$variables) {
       '#width' => $dimensions['width'],
       '#height' => $dimensions['height'],
       '#attributes' => $variables['attributes'],
-      '#uri' => $variables['uri'],
+      '#uri' => $uri,
     ];
   }
   else {
     $style = $neoImageStyle->getImageStyle();
-    $style->transformDimensions($dimensions, $variables['uri']);
+    $style->transformDimensions($dimensions, $uri);
 
     $variables['image'] = [
       '#theme' => 'image',
@@ -202,11 +203,11 @@ function template_preprocess_neo_image_style(&$variables) {
     // If the current image toolkit supports this file type, prepare the URI for
     // the derivative image. If not, just use the original image resized to the
     // dimensions specified by the style.
-    if ($style->supportsUri($variables['uri'])) {
-      $variables['image']['#uri'] = $style->buildUrl($variables['uri']);
+    if ($style->supportsUri($uri)) {
+      $variables['image']['#uri'] = $style->buildUrl($uri);
     }
     else {
-      $variables['image']['#uri'] = $variables['uri'];
+      $variables['image']['#uri'] = $uri;
       // Don't render the image by default, but allow other preprocess functions
       // to override that if they need to.
       $variables['image']['#access'] = FALSE;
@@ -214,7 +215,7 @@ function template_preprocess_neo_image_style(&$variables) {
       // Inform the site builders why their image didn't work.
       \Drupal::logger('image')->warning('Could not apply @style image style to @uri because the style does not support it.', [
         '@style' => $style->label(),
-        '@uri' => $variables['uri'],
+        '@uri' => $uri,
       ]);
     }
   }
@@ -232,7 +233,6 @@ function template_preprocess_neo_image_style(&$variables) {
  * Implements hook_image_style_flush().
  */
 function neo_image_image_style_flush($style, $path = NULL) {
-  $path = 'public://2024-05/wallhaven-6dyj26.JPG';
   if ($path) {
     /** @var \Drupal\neo_image\NeoImageStyleManager $style_manager */
     $style_manager = \Drupal::service('neo_image.style_manager');

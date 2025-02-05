@@ -198,8 +198,6 @@ final class ImageSettings extends SettingsBase {
     foreach ($this->styleManager->getStyles() as $name => $style) {
       $this->styleManager->flushStyle($name);
     }
-    // $this->styleManager->flushStyles();
-    // $this->messenger()->addMessage($this->t('Image styles flushed.'));
   }
 
 }

@@ -2,10 +2,12 @@
 
 namespace Drupal\neo_image;
 
+use Drupal\Component\Utility\UrlHelper;
 use Drupal\file\FileInterface;
 use Drupal\image\Entity\ImageStyle;
 use Drupal\image\ImageStyleInterface;
 use Drupal\media\MediaInterface;
+use Drupal\neo\Helpers\Str;
 
 /**
  * The dynamic image generator.
@@ -32,6 +34,7 @@ class NeoImageStyle {
     'sc' => 'image_scale_and_crop',
     'f' => 'focal_point_scale_and_crop',
     'fw' => 'focal_point_crop_by_width',
+    'e' => 'exact',
   ];
 
   /**
@@ -43,9 +46,11 @@ class NeoImageStyle {
     'r' => 'Resize',
     's' => 'Scale',
     'c' => 'Crop',
+    'cs' => 'Crop Sides',
     'sc' => 'Scale and Crop',
     'f' => 'Focal Scale and Crop',
     'fw' => 'Focal Scale by Width',
+    'e' => 'Exact',
   ];
 
   /**
@@ -95,6 +100,7 @@ class NeoImageStyle {
         'cropSides',
         'focal',
         'focalWidth',
+        'exact',
       ];
       foreach ($options as $key => $option) {
         if (method_exists($this, $key) && in_array($key, $allowed)) {
@@ -211,6 +217,20 @@ class NeoImageStyle {
   }
 
   /**
+   * Preprocess exact.
+   *
+   * @param array $data
+   *   The data.
+   *
+   * @return array
+   *   The data.
+   */
+  protected function preprocessImageScale(array $data):array {
+    $data['upscale'] = TRUE;
+    return $data;
+  }
+
+  /**
    * Set size.
    *
    * @param string|int $width
@@ -318,6 +338,55 @@ class NeoImageStyle {
   }
 
   /**
+   * Set exact by width and height.
+   *
+   * @param string|int $width
+   *   The width.
+   * @param string|int $height
+   *   The height.
+   * @param string $anchor
+   *   Defaults to center-center.
+   *
+   * @return $this
+   */
+  public function exact($width, $height, $anchor = NULL):self {
+    $this->parameters['e']['w'] = (int) $width;
+    $this->parameters['e']['h'] = (int) $height;
+    if ($anchor) {
+      $anchorKeys = array_flip($this->valueKeys['a']);
+      if (!isset($anchorKeys[$anchor])) {
+        throw new \InvalidArgumentException('Invalid anchor value.');
+      }
+      $this->parameters['e']['a'] = $anchorKeys[$anchor];
+    }
+    return $this;
+  }
+
+  /**
+   * Preprocess exact.
+   *
+   * @param array $data
+   *   The data.
+   *
+   * @return array
+   *   The data.
+   */
+  protected function preprocessExact(array $data):array {
+    $data = [
+      'canvas_size' => 'exact',
+      'canvas_color' => NULL,
+      'exact' => [
+        'width' => $data['width'] . 'px',
+        'height' => $data['height'] . 'px',
+        'placement' => $data['anchor'] ?? 'center-center',
+        'x_offset' => 0,
+        'y_offset' => 0,
+      ],
+    ];
+    return $data;
+  }
+
+  /**
    * Get image style id.
    *
    * @return string
@@ -362,9 +431,21 @@ class NeoImageStyle {
       'name' => $this->getImageStyleName(),
     ]);
     foreach ($this->getImageStyleEffects() as $id => $data) {
+      $callback = Str::camel('preprocess_' . $id);
+      if (method_exists($this, $callback)) {
+        $data = $this->$callback($data);
+      }
       $image_style->addImageEffect([
         'id' => $id,
         'data' => $data,
+      ]);
+    }
+    if (\Drupal::hasService('webp.webp')) {
+      $image_style->addImageEffect([
+        'id' => 'image_convert',
+        'data' => [
+          'extension' => 'webp',
+        ],
       ]);
     }
     return $image_style;
@@ -503,6 +584,22 @@ class NeoImageStyle {
   }
 
   /**
+   * Check if URI is external.
+   *
+   * @param string $uri
+   *   The URI.
+   *
+   * @return bool
+   *   If the URI is external.
+   */
+  public static function isExternalUri(string $uri):bool {
+    if (UrlHelper::isExternal($uri)) {
+      return TRUE;
+    }
+    return strpos($uri, 'public://') !== 0;
+  }
+
+  /**
    * Render media or file as image.
    *
    * @param Drupal\media\MediaInterface|\Drupal\file\FileInterface $entity
@@ -563,6 +660,48 @@ class NeoImageStyle {
       '#title' => $title,
       '#attributes' => $attributes,
     ];
+  }
+
+  /**
+   * Converts a given URI to a URL using the image style.
+   *
+   * @param string $url
+   *   The URL of the image to be converted.
+   *
+   * @return string
+   *   The URL of the image after applying the image style.
+   */
+  public function toUrlFromUri(string $url):string {
+    $uri = str_replace('/sites/default/files/', 'public://', $url);
+    if (self::isExternalUri($uri)) {
+      return $url;
+    }
+    return $this->getImageStyle()->buildUrl($uri);
+  }
+
+  /**
+   * Generates a URL for the given media or file entity.
+   *
+   * This method takes a MediaInterface or FileInterface entity and generates
+   * a URL for the associated image style. If the entity is a MediaInterface,
+   * it retrieves the thumbnail file entity. If the entity is a FileInterface,
+   * it directly generates the URL for the file's URI using the image style.
+   *
+   * @param Drupal\media\MediaInterface|\Drupal\file\FileInterface $entity
+   *   The media or file entity for which to generate the URL.
+   *
+   * @return string
+   *   The generated URL for the image style, or '#' if the entity is not a
+   *   valid file.
+   */
+  public function toUrlFromEntity(MediaInterface|FileInterface $entity):string {
+    $file = $entity instanceof MediaInterface ? $entity->get('thumbnail')->entity : $entity;
+    if ($file instanceof FileInterface) {
+      $uri = $file->getFileUri();
+      $uri = str_replace('/sites/default/files/', 'public://', $uri);
+      return $this->getImageStyle()->buildUrl($uri);
+    }
+    return '#';
   }
 
 }

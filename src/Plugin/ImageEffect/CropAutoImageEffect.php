@@ -17,7 +17,7 @@ use Drupal\image\ImageEffectBase;
   label: new TranslatableMarkup('Crop: Sides'),
   description: new TranslatableMarkup('Will automatically remove empty transparency around the image.'),
 )]
-class CropAuto extends ImageEffectBase {
+class CropAutoImageEffect extends ImageEffectBase {
 
   /**
    * {@inheritdoc}
