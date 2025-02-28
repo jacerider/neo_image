@@ -233,7 +233,7 @@ function template_preprocess_neo_image_style(&$variables) {
  * Implements hook_image_style_flush().
  */
 function neo_image_image_style_flush($style, $path = NULL) {
-  if ($path) {
+  if ($path && substr($path, 0, 12) !== 'temporary://') {
     /** @var \Drupal\neo_image\NeoImageStyleManager $style_manager */
     $style_manager = \Drupal::service('neo_image.style_manager');
     $fileSystem = \Drupal::service('file_system');
