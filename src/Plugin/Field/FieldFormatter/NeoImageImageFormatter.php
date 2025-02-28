@@ -7,22 +7,22 @@ use Drupal\Core\StringTranslation\TranslatableMarkup;
 use Drupal\Core\Field\FieldDefinitionInterface;
 
 /**
- * Plugin implementation of the 'neo_image_media' formatter.
+ * Plugin implementation of the 'neo_image_image' formatter.
  */
 #[FieldFormatter(
-  id: 'neo_image_media',
+  id: 'neo_image_image',
   label: new TranslatableMarkup('Neo | Image'),
   field_types: [
-    'entity_reference',
+    'image',
   ]
 )]
-final class NeoImageMediaFormatter extends NeoImageBaseFormatter {
+final class NeoImageImageFormatter extends NeoImageBaseFormatter {
 
   /**
    * {@inheritdoc}
    */
   public static function isApplicable(FieldDefinitionInterface $field_definition) {
-    return ($field_definition->getFieldStorageDefinition()->getSetting('target_type') == 'media');
+    return ($field_definition->getFieldStorageDefinition()->getSetting('target_type') == 'file');
   }
 
 }
