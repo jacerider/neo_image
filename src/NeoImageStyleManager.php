@@ -34,7 +34,7 @@ final class NeoImageStyleManager {
    * @return \Drupal\neo_image\NeoImageStyle[]
    *   The styles.
    */
-  public function getStyles(array $effect_types = NULL): array {
+  public function getStyles(?array $effect_types = NULL): array {
     if (!isset($this->styles)) {
       $this->styles = [];
       $wrappers = $this->streamWrapperManager->getWrappers(StreamWrapperInterface::WRITE_VISIBLE);

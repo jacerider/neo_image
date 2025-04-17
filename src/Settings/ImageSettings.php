@@ -44,7 +44,7 @@ final class ImageSettings extends SettingsBase {
     $plugin_definition,
     MessengerInterface $messenger,
     FormBuilderInterface $form_builder,
-    NeoImageStyleManager $style_manager
+    NeoImageStyleManager $style_manager,
   ) {
     parent::__construct($configuration, $plugin_id, $plugin_definition, $messenger, $form_builder);
     $this->styleManager = $style_manager;

@@ -7,7 +7,6 @@ namespace Drupal\neo_image\Plugin\ImageToolkit\Operation\gd;
 use Drupal\Core\ImageToolkit\Attribute\ImageToolkitOperation;
 use Drupal\Core\StringTranslation\TranslatableMarkup;
 use Drupal\neo_image\NeoImagePositionedRectangle;
-use Drupal\system\Plugin\ImageToolkit\Operation\gd\GDImageToolkitOperationBase;
 use Drupal\system\Plugin\ImageToolkit\Operation\gd\Resize;
 
 /**
