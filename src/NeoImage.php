@@ -103,7 +103,11 @@ final class NeoImage implements RenderableInterface {
     if ($entity instanceof MediaInterface) {
       /** @var \Drupal\media\MediaInterface $entity */
       $fieldDefinition = $entity->getSource()->getSourceFieldDefinition($entity->bundle->entity);
-      $value = $entity->get($fieldDefinition->getName())->first()->getValue() + [
+      $item = $entity->get($fieldDefinition->getName())->first();
+      if (!$item) {
+        throw new \InvalidArgumentException('The media entity does not have a file.');
+      }
+      $value = $item->getValue() + [
         'alt' => '',
         'title' => '',
       ];

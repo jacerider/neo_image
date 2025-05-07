@@ -140,12 +140,16 @@ class NeoImageBaseFormatter extends EntityReferenceFormatterBase {
     $imageDimensions = $imageSettings['dimensions'] ?? [];
 
     foreach ($entities as $delta => $media) {
-      $image = NeoImage::createFromEntity($media);
-      $image->autoFromDimensions($imageDimensions);
-      $elements[$delta] = $image->toRenderable();
+      try {
+        $image = NeoImage::createFromEntity($media);
+        $image->autoFromDimensions($imageDimensions);
+        $elements[$delta] = $image->toRenderable();
 
-      // Add cacheability of each item in the field.
-      $this->renderer->addCacheableDependency($elements[$delta], $media);
+        // Add cacheability of each item in the field.
+        $this->renderer->addCacheableDependency($elements[$delta], $media);
+      }
+      catch (\Exception $e) {
+      }
     }
 
     return $elements;
