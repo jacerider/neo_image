@@ -62,9 +62,6 @@ class Exact extends Resize {
     ];
 
     $scale_arguments = parent::validateArguments($scale_arguments);
-
-    // kint($scale_arguments, $this->getToolkit()->getWidth());
-    // die;
     $status = parent::execute($scale_arguments);
     if (!$status) {
       return FALSE;
