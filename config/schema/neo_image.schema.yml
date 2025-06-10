@@ -1,0 +1,51 @@
+field.formatter.settings.neo_image_media:
+  type: mapping
+  label: 'Neo Image: Media'
+  mapping:
+    image:
+      type: mapping
+      label: 'Image'
+      mapping:
+        dimensions:
+          type: sequence
+          label: 'Dimensions'
+          sequence:
+            type: neo_image.dimensions
+
+field.formatter.settings.neo_image_image:
+  type: mapping
+  label: 'Neo Image: Image'
+  mapping:
+    image:
+      type: mapping
+      label: 'Image'
+      mapping:
+        dimensions:
+          type: sequence
+          label: 'Dimensions'
+          sequence:
+            type: neo_image.dimensions
+
+neo_image.settings:
+  type: mapping
+  label: 'Neo Image Settings'
+  mapping:
+    dimensions:
+      type: sequence
+      label: 'Dimensions'
+      sequence:
+        type: neo_image.dimensions
+
+neo_image.dimensions:
+  type: mapping
+  label: 'Neo Image Dimensions'
+  mapping:
+    width:
+      type: integer
+      label: Width
+    height:
+      type: integer
+      label: Height
+    exact:
+      type: boolean
+      label: Exact
