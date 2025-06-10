@@ -87,17 +87,21 @@ final class ImageSettings extends SettingsBase {
       '' => $this->t('- Custom -'),
     ];
     $sizeOptionsByDimension = [];
-    $styles = $this->styleManager->getStyles(['f', 's']);
+    $styles = $this->styleManager->getStyles(['f', 's', 'e']);
     foreach ($styles as $id => $style) {
       if ($style->getEffectCount() !== 1) {
         continue;
       }
       $sizeOptions[$id] = $style->label();
-      $width = $style->getWidth();
-      $height = $style->getHeight();
       $parts = explode('--', $id);
-      $sizeOptionsByDimension[$parts[1]] = $id;
+      $key = $parts[1];
+      if ($style->isExact()) {
+        $key = 'e_' . $key;
+      }
+      $sizeOptionsByDimension[$key] = $id;
     }
+
+    natsort($sizeOptions);
 
     $form['dimensions'] = [
       '#type' => 'table',
@@ -106,6 +110,7 @@ final class ImageSettings extends SettingsBase {
         'style' => $this->t('Style'),
         'width' => $this->t('Width'),
         'height' => $this->t('Height'),
+        'exact' => $this->t('Exact'),
       ],
     ];
 
@@ -113,15 +118,19 @@ final class ImageSettings extends SettingsBase {
     foreach ($breakpoints as $size => $breakpoint) {
       $width = $this->getValue(['dimensions', $size, 'width']);
       $height = $this->getValue(['dimensions', $size, 'height']);
-      $dimentionKey = [];
+      $exact = $this->getValue(['dimensions', $size, 'exact'], $width && $height);
+      $dimensionKey = [];
+      if ($exact) {
+        $dimensionKey[] = 'e';
+      }
       if ($width) {
-        $dimentionKey[] = 'w-' . $width;
+        $dimensionKey[] = 'w-' . $width;
       }
       if ($height) {
-        $dimentionKey[] = 'h-' . $height;
+        $dimensionKey[] = 'h-' . $height;
       }
-      $dimentionKey = implode('_', $dimentionKey);
-      $style = $sizeOptionsByDimension[$dimentionKey] ?? NULL;
+      $dimensionKey = implode('_', $dimensionKey);
+      $style = $sizeOptionsByDimension[$dimensionKey] ?? NULL;
 
       if (count($breakpoints) === 1) {
         unset($form['dimensions']['#header']['title']);
@@ -159,6 +168,17 @@ final class ImageSettings extends SettingsBase {
           ],
         ],
       ];
+      $form['dimensions'][$size]['exact'] = [
+        '#type' => 'checkbox',
+        '#default_value' => $exact,
+        '#states' => [
+          'visible' => [
+            ':input[name="' . $form['#input_selector'] . '[dimensions][' . $size . '][style]' . '"]' => ['value' => ''],
+            ':input[name="' . $form['#input_selector'] . '[dimensions][' . $size . '][width]' . '"]' => ['filled' => TRUE],
+            ':input[name="' . $form['#input_selector'] . '[dimensions][' . $size . '][height]' . '"]' => ['filled' => TRUE],
+          ],
+        ],
+      ];
     }
 
     return $form;
@@ -186,6 +206,9 @@ final class ImageSettings extends SettingsBase {
         $neoImageStyle->setParameters($neoImageStyle->convertIdToParams($config['style']));
         $form_state->setValue(['dimensions', $size, 'width'], $neoImageStyle->getWidth() ?? '');
         $form_state->setValue(['dimensions', $size, 'height'], $neoImageStyle->getHeight() ?? '');
+      }
+      if (empty($config['width']) || empty($config['height'])) {
+        $form_state->setValue(['dimensions', $size, 'exact'], FALSE);
       }
       $form_state->unsetValue(['dimensions', $size, 'style']);
     }

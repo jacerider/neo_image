@@ -2,15 +2,20 @@ dimensions:
   sm:
     width: 640
     height: ''
+    exact: false
   md:
     width: ''
     height: ''
+    exact: false
   lg:
     width: ''
     height: ''
+    exact: false
   xl:
     width: ''
     height: ''
+    exact: false
   2xl:
     width: ''
     height: ''
+    exact: false

@@ -161,15 +161,22 @@ class NeoImageStyle {
    *   The width.
    * @param string|int $height
    *   The height.
+   * @param bool $exact
+   *   If the size should be exact.
    *
    * @return $this
    */
-  public function auto($width = NULL, $height = NULL):self {
+  public function auto($width = NULL, $height = NULL, $exact = FALSE):self {
     if (!$width && !$height) {
       throw new \InvalidArgumentException('Width or height must be set.');
     }
     if ($width && $height) {
-      $this->focal($width, $height);
+      if ($exact) {
+        $this->exact($width, $height);
+      }
+      else {
+        $this->focal($width, $height);
+      }
     }
     else {
       $this->scale($width, $height);
@@ -217,7 +224,7 @@ class NeoImageStyle {
   }
 
   /**
-   * Preprocess exact.
+   * Preprocess scale.
    *
    * @param array $data
    *   The data.
@@ -360,6 +367,16 @@ class NeoImageStyle {
       $this->parameters['e']['a'] = $anchorKeys[$anchor];
     }
     return $this;
+  }
+
+  /**
+   * Check if exact is set.
+   *
+   * @return bool
+   *   If exact is set.
+   */
+  public function isExact():bool {
+    return isset($this->parameters['e']);
   }
 
   /**

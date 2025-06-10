@@ -166,7 +166,10 @@ final class NeoImage implements RenderableInterface {
    *
    * @param array $dimensions
    *   An array of dimensions for different sizes. Each dimension should include
-   *   a 'width', and/or 'height' key.
+   *   a 'width', and/or 'height' key. Optionally, it can include 'exact' if
+   *   the image should be resized to those exact dimensions, 'achor' for
+   *   specifying the anchor point, and 'op' for the operation to perform on the
+   *   image (e.g., 'resize', 'crop', etc.).
    *
    * @return $this
    *   The current instance of NeoImage.
@@ -180,6 +183,7 @@ final class NeoImage implements RenderableInterface {
       $settings += [
         'width' => '',
         'height' => '',
+        'exact' => FALSE,
         'achor' => '',
         'op' => 'auto',
       ];
