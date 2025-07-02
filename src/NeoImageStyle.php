@@ -682,18 +682,27 @@ class NeoImageStyle {
   /**
    * Converts a given URI to a URL using the image style.
    *
-   * @param string $url
+   * @param string $uri
    *   The URL of the image to be converted.
+   * @param bool $ensure
+   *   Whether to ensure the image style derivative exists.
    *
    * @return string
    *   The URL of the image after applying the image style.
    */
-  public function toUrlFromUri(string $url):string {
-    $uri = str_replace('/sites/default/files/', 'public://', $url);
+  public function toUrlFromUri(string $uri, bool $ensure = FALSE):string {
+    $uri = str_replace('/sites/default/files/', 'public://', $uri);
     if (self::isExternalUri($uri)) {
-      return $url;
+      return $uri;
     }
-    return $this->getImageStyle()->buildUrl($uri);
+    $style = $this->getImageStyle();
+    if ($ensure) {
+      $styleUri = $style->buildUri($uri);
+      if (!file_exists($styleUri)) {
+        $style->createDerivative($uri, $styleUri);
+      }
+    }
+    return $style->buildUrl($uri);
   }
 
   /**
@@ -706,17 +715,26 @@ class NeoImageStyle {
    *
    * @param Drupal\media\MediaInterface|\Drupal\file\FileInterface $entity
    *   The media or file entity for which to generate the URL.
+   * @param bool $ensure
+   *   Whether to ensure the image style derivative exists.
    *
    * @return string
    *   The generated URL for the image style, or '#' if the entity is not a
    *   valid file.
    */
-  public function toUrlFromEntity(MediaInterface|FileInterface $entity):string {
+  public function toUrlFromEntity(MediaInterface|FileInterface $entity, $ensure = FALSE):string {
     $file = $entity instanceof MediaInterface ? $entity->get('thumbnail')->entity : $entity;
     if ($file instanceof FileInterface) {
       $uri = $file->getFileUri();
       $uri = str_replace('/sites/default/files/', 'public://', $uri);
-      return $this->getImageStyle()->buildUrl($uri);
+      $style = $this->getImageStyle();
+      if ($ensure) {
+        $styleUri = $style->buildUri($uri);
+        if (!file_exists($styleUri)) {
+          $style->createDerivative($uri, $styleUri);
+        }
+      }
+      return $style->buildUrl($uri);
     }
     return '#';
   }
