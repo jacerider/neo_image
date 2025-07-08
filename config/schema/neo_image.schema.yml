@@ -27,7 +27,7 @@ field.formatter.settings.neo_image_image:
             type: neo_image.dimensions
 
 neo_image.settings:
-  type: mapping
+  type: config_object
   label: 'Neo Image Settings'
   mapping:
     dimensions:
@@ -43,9 +43,11 @@ neo_image.dimensions:
     width:
       type: integer
       label: Width
+      nullable: true
     height:
       type: integer
       label: Height
+      nullable: true
     exact:
       type: boolean
       label: Exact

@@ -1,21 +1,21 @@
 dimensions:
   sm:
     width: 640
-    height: ''
+    height: null
     exact: false
   md:
-    width: ''
-    height: ''
+    width: null
+    height: null
     exact: false
   lg:
-    width: ''
-    height: ''
+    width: null
+    height: null
     exact: false
   xl:
-    width: ''
-    height: ''
+    width: null
+    height: null
     exact: false
   2xl:
-    width: ''
-    height: ''
+    width: null
+    height: null
     exact: false
