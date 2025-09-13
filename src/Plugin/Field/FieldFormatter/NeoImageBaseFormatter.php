@@ -3,6 +3,7 @@
 namespace Drupal\neo_image\Plugin\Field\FieldFormatter;
 
 use Drupal\Core\Entity\EntityInterface;
+use Drupal\Core\Field\EntityReferenceFieldItemListInterface;
 use Drupal\Core\Field\FieldItemListInterface;
 use Drupal\Core\Form\FormStateInterface;
 use Drupal\Core\Field\Plugin\Field\FieldType\EntityReferenceItem;
@@ -10,12 +11,17 @@ use Drupal\Core\Render\RendererInterface;
 use Symfony\Component\DependencyInjection\ContainerInterface;
 use Drupal\Core\Field\FieldDefinitionInterface;
 use Drupal\Core\Field\Plugin\Field\FieldFormatter\EntityReferenceFormatterBase;
+use Drupal\neo\Plugin\Field\FieldFormatter\NeoEntityReferenceLinkTrait;
+use Drupal\neo\Plugin\Field\FieldFormatter\NeoEntityReferenceSelectionTrait;
 use Drupal\neo_image\NeoImage;
 
 /**
  * Plugin implementation of the 'neo_image_image' formatter.
  */
 class NeoImageBaseFormatter extends EntityReferenceFormatterBase {
+
+  use NeoEntityReferenceLinkTrait;
+  use NeoEntityReferenceSelectionTrait;
 
   /**
    * The renderer service.
@@ -78,7 +84,7 @@ class NeoImageBaseFormatter extends EntityReferenceFormatterBase {
           ],
         ],
       ],
-    ] + parent::defaultSettings();
+    ] + self::linkDefaultSettings() + self::selectionDefaultSettings() + parent::defaultSettings();
   }
 
   /**
@@ -107,6 +113,9 @@ class NeoImageBaseFormatter extends EntityReferenceFormatterBase {
       '#theme_wrappers' => ['container'],
     ];
 
+    $element += $this->linkSettingsForm($element, $form_state);
+    $element += $this->selectionSettingsForm($element, $form_state);
+
     return $element;
   }
 
@@ -127,7 +136,7 @@ class NeoImageBaseFormatter extends EntityReferenceFormatterBase {
       }
     }
 
-    return $summary;
+    return array_merge($summary, $this->linkSettingsSummary(), $this->selectionSettingsSummary());
   }
 
   /**
@@ -139,20 +148,32 @@ class NeoImageBaseFormatter extends EntityReferenceFormatterBase {
     $imageSettings = $this->getSetting('image');
     $imageDimensions = $imageSettings['dimensions'] ?? [];
 
-    foreach ($entities as $delta => $media) {
+    foreach ($entities as $delta => $entity) {
       try {
-        $image = NeoImage::createFromEntity($media);
+        $image = NeoImage::createFromEntity($entity);
         $image->autoFromDimensions($imageDimensions);
         $elements[$delta] = $image->toRenderable();
+        if ($url = $this->getLinkUrl($items->getEntity(), $entity)) {
+          $elements[$delta]['#url'] = $url;
+        }
 
         // Add cacheability of each item in the field.
-        $this->renderer->addCacheableDependency($elements[$delta], $media);
+        $this->renderer->addCacheableDependency($elements[$delta], $entity);
       }
       catch (\Exception $e) {
       }
     }
 
     return $elements;
+  }
+
+  /**
+   * {@inheritdoc}
+   */
+  protected function getEntitiesToView(EntityReferenceFieldItemListInterface $items, $langcode) {
+    $entities = parent::getEntitiesToView($items, $langcode);
+    $entities = $this->filterSelectionEntities($entities);
+    return $entities;
   }
 
   /**
