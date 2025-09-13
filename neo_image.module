@@ -22,6 +22,7 @@ function neo_image_theme() {
         'alt' => NULL,
         'title' => NULL,
         'attributes' => [],
+        'url' => NULL,
       ],
     ],
     // Theme functions in image.module.
@@ -32,6 +33,7 @@ function neo_image_theme() {
         'alt' => NULL,
         'title' => NULL,
         'attributes' => [],
+        'url' => NULL,
       ],
     ],
   ];
