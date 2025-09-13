@@ -15,6 +15,9 @@
  * @ingroup themeable
  */
 #}
+{% if url %}
+<a href="{{ url }}">
+{% endif %}
 {% if output_image_tag %}
   {{ img_element }}
 {% else %}
@@ -27,4 +30,7 @@
     {# The controlling image, with the fallback image in srcset. #}
     {{ img_element|neo_attributes(attributes) }}
   </picture>
+{% endif %}
+{% if url %}
+</a>
 {% endif %}
