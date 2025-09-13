@@ -1,20 +1,14 @@
 field.formatter.settings.neo_image_media:
-  type: mapping
+  type: neo_image.base
   label: 'Neo Image: Media'
-  mapping:
-    image:
-      type: mapping
-      label: 'Image'
-      mapping:
-        dimensions:
-          type: sequence
-          label: 'Dimensions'
-          sequence:
-            type: neo_image.dimensions
 
 field.formatter.settings.neo_image_image:
-  type: mapping
+  type: neo_image.base
   label: 'Neo Image: Image'
+
+neo_image.base:
+  type: mapping
+  label: Neo Image Base
   mapping:
     image:
       type: mapping
@@ -25,6 +19,21 @@ field.formatter.settings.neo_image_image:
           label: 'Dimensions'
           sequence:
             type: neo_image.dimensions
+    image_link:
+      type: string
+      label: Image link
+    selection_mode:
+      type: string
+      label: Selection mode
+    amount:
+      type: integer
+      label: Amount
+    offset:
+      type: integer
+      label: Offset
+    reverse:
+      type: boolean
+      label: Reverse
 
 neo_image.settings:
   type: config_object
