@@ -76,11 +76,12 @@ function template_preprocess_neo_image(&$variables) {
     $neoImageStyles = array_reverse($neoImage->getStyles());
     $styleCount = count($neoImageStyles);
     $lastSize = array_key_last($neoImageStyles);
+    $outputImageTag = $styleCount === 1;
 
-    $variables['output_image_tag'] = $styleCount === 1;
+    $variables['output_image_tag'] = $outputImageTag;
     foreach ($neoImageStyles as $size => $neoImageStyle) {
       if ($size === $lastSize) {
-        $variables['img_element'] = $neoImageStyle->toRenderableFromUri($uri, $variables['alt'], $variables['title']);
+        $variables['img_element'] = $neoImageStyle->toRenderableFromUri($uri, $variables['alt'], $variables['title'], $outputImageTag ? $variables['attributes'] : []);
       }
       else {
         $imageStyle = $neoImageStyle->getImageStyle();
