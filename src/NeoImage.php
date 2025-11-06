@@ -57,23 +57,19 @@ final class NeoImage implements RenderableInterface {
     ],
     'md' => [
       'label' => 'Medium',
-      'mediaQuery' => '(min-width: 640px)',
-      // 'mediaQuery' => '(min-width: 768px)',
+      'mediaQuery' => '(width >= 48rem)',
     ],
     'lg' => [
       'label' => 'Large',
-      'mediaQuery' => '(min-width: 768px)',
-      // 'mediaQuery' => '(min-width: 1024px)',
+      'mediaQuery' => '(width >= 64rem)',
     ],
     'xl' => [
       'label' => 'Extra Large',
-      'mediaQuery' => '(min-width: 1024px)',
-      // 'mediaQuery' => '(min-width: 1280px)',
+      'mediaQuery' => '(width >= 80rem)',
     ],
     '2xl' => [
       'label' => '2x Large',
-      'mediaQuery' => '(min-width: 1280px)',
-      // 'mediaQuery' => '(min-width: 1536px)',
+      'mediaQuery' => '(width >= 96rem)',
     ],
   ];
 
