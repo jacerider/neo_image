@@ -5,7 +5,6 @@
  * Primary module hooks for Neo Image module.
  */
 
-use Drupal\Component\Utility\UrlHelper;
 use Drupal\Core\StreamWrapper\StreamWrapperInterface;
 use Drupal\Core\Template\Attribute;
 use Drupal\neo_image\NeoImage;
