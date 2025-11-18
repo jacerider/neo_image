@@ -19,7 +19,6 @@ class RouteSubscriber implements EventSubscriberInterface {
   public function onRouteAlter(RouteBuildEvent $event) {
     $event->getRouteCollection()
       ->get('image.style_public')
-      // ->setDefault('_controller', 'Drupal\neo_image\Controller\NeoImageController::deliver')
       ->setOption('parameters', [
         'image_style' => [
           'type' => 'image_style_dynamic',
@@ -27,7 +26,6 @@ class RouteSubscriber implements EventSubscriberInterface {
       ]);
     $event->getRouteCollection()
       ->get('image.style_private')
-      // ->setDefault('_controller', 'Drupal\neo_image\Controller\NeoImageController::deliver')
       ->setOption('parameters', [
         'image_style' => [
           'type' => 'image_style_dynamic',

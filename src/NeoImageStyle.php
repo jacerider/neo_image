@@ -457,14 +457,12 @@ class NeoImageStyle {
         'data' => $data,
       ]);
     }
-    if (\Drupal::hasService('webp.webp')) {
-      $image_style->addImageEffect([
-        'id' => 'image_convert',
-        'data' => [
-          'extension' => 'webp',
-        ],
-      ]);
-    }
+    $image_style->addImageEffect([
+      'id' => 'image_convert_avif',
+      'data' => [
+        'extension' => 'webp',
+      ],
+    ]);
     return $image_style;
   }
 

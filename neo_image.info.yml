@@ -7,6 +7,5 @@ core_version_requirement: ^10.3 || ^11
 dependencies:
   - drupal:breakpoint
   - drupal:image
-  - webp:webp
   - neo:neo
   - neo_settings:neo_settings
