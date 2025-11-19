@@ -457,8 +457,9 @@ class NeoImageStyle {
         'data' => $data,
       ]);
     }
+    $effectId = version_compare(\Drupal::VERSION, '11.2.0', '>=') ? 'image_convert_avif' : 'image_convert';
     $image_style->addImageEffect([
-      'id' => 'image_convert_avif',
+      'id' => $effectId,
       'data' => [
         'extension' => 'webp',
       ],
