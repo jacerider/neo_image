@@ -5,6 +5,7 @@
  * Primary module hooks for Neo Image module.
  */
 
+use Drupal\Core\Site\Settings;
 use Drupal\Core\StreamWrapper\StreamWrapperInterface;
 use Drupal\Core\Template\Attribute;
 use Drupal\neo_image\NeoImage;
@@ -76,6 +77,8 @@ function template_preprocess_neo_image(&$variables) {
     $styleCount = count($neoImageStyles);
     $lastSize = array_key_last($neoImageStyles);
     $outputImageTag = $styleCount === 1;
+    /** @var \Drupal\Core\File\FileUrlGeneratorInterface $fileUrlGenerator */
+    $fileUrlGenerator = \Drupal::service('file_url_generator');
 
     $variables['output_image_tag'] = $outputImageTag;
     foreach ($neoImageStyles as $size => $neoImageStyle) {
@@ -84,7 +87,7 @@ function template_preprocess_neo_image(&$variables) {
       }
       else {
         $imageStyle = $neoImageStyle->getImageStyle();
-        $imageUri = $imageStyle->buildUrl($uri);
+        $imageUri = $fileUrlGenerator->transformRelative($imageStyle->buildUrl($uri));
         $dimensions = [
           'width' => $width,
           'height' => $height,
@@ -150,7 +153,7 @@ function template_preprocess_neo_image(&$variables) {
 function template_preprocess_neo_image_style(&$variables) {
   /** @var \Drupal\neo_image\NeoImageStyle $neoImageStyle */
   $neoImageStyle = $variables['neoImageStyle'];
-  $uri = str_replace('/sites/default/files/', 'public://', $variables['uri']);
+  $uri = str_replace('/' . Settings::get('file_public_path', 'sites/default/files') . '/', 'public://', $variables['uri']);
 
   if (NeoImageStyle::isExternalUri($uri)) {
     $style = $neoImageStyle->getImageStyle();
