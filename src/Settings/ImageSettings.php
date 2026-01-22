@@ -152,7 +152,7 @@ final class ImageSettings extends SettingsBase {
         '#field_suffix' => 'px',
         '#states' => [
           'invisible' => [
-            ':input[name="' . $form['#input_selector'] . '[dimensions][' . $size . '][style]' . '"]' => ['!value' => ''],
+            ':input[name="' . $form['#input_selector'] . '[dimensions][' . $size . '][style]"]' => ['!value' => ''],
           ],
         ],
       ];
@@ -164,7 +164,7 @@ final class ImageSettings extends SettingsBase {
         '#field_suffix' => 'px',
         '#states' => [
           'invisible' => [
-            ':input[name="' . $form['#input_selector'] . '[dimensions][' . $size . '][style]' . '"]' => ['!value' => ''],
+            ':input[name="' . $form['#input_selector'] . '[dimensions][' . $size . '][style]"]' => ['!value' => ''],
           ],
         ],
       ];
@@ -173,9 +173,9 @@ final class ImageSettings extends SettingsBase {
         '#default_value' => $exact,
         '#states' => [
           'visible' => [
-            ':input[name="' . $form['#input_selector'] . '[dimensions][' . $size . '][style]' . '"]' => ['value' => ''],
-            ':input[name="' . $form['#input_selector'] . '[dimensions][' . $size . '][width]' . '"]' => ['filled' => TRUE],
-            ':input[name="' . $form['#input_selector'] . '[dimensions][' . $size . '][height]' . '"]' => ['filled' => TRUE],
+            ':input[name="' . $form['#input_selector'] . '[dimensions][' . $size . '][style]"]' => ['value' => ''],
+            ':input[name="' . $form['#input_selector'] . '[dimensions][' . $size . '][width]"]' => ['filled' => TRUE],
+            ':input[name="' . $form['#input_selector'] . '[dimensions][' . $size . '][height]"]' => ['filled' => TRUE],
           ],
         ],
       ];
