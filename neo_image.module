@@ -10,6 +10,7 @@ use Drupal\Core\StreamWrapper\StreamWrapperInterface;
 use Drupal\Core\Template\Attribute;
 use Drupal\neo_image\NeoImage;
 use Drupal\neo_image\NeoImageStyle;
+use Drupal\neo_image\Service\AnimatedGif;
 
 /**
  * Implements hook_theme().
@@ -155,7 +156,8 @@ function template_preprocess_neo_image_style(&$variables) {
   $neoImageStyle = $variables['neoImageStyle'];
   $uri = str_replace('/' . Settings::get('file_public_path', 'sites/default/files') . '/', 'public://', $variables['uri']);
 
-  if (NeoImageStyle::isExternalUri($uri)) {
+  $animatedGif = new AnimatedGif();
+  if (NeoImageStyle::isExternalUri($uri) || $animatedGif->isAnAnimatedGif($uri)) {
     $style = $neoImageStyle->getImageStyle();
     $dimensions = [
       'width' => 10000,
