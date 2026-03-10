@@ -231,6 +231,10 @@ final class ImageSettings extends SettingsBase {
     foreach ($form_state->getValue(['dimensions']) as $size => $config) {
       $config += $config['settings'];
       unset($config['settings']);
+      if (empty($config['style']) && empty($config['width']) && empty($config['height'])) {
+        $form_state->unsetValue(['dimensions', $size]);
+        continue;
+      }
       $form_state->setValue(['dimensions', $size], $config);
       if (!empty($config['style'])) {
         $neoImageStyle = new NeoImageStyle();
