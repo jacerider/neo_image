@@ -108,9 +108,7 @@ final class ImageSettings extends SettingsBase {
       '#header' => [
         'title' => $this->t('Image Size'),
         'style' => $this->t('Style'),
-        'width' => $this->t('Width'),
-        'height' => $this->t('Height'),
-        'exact' => $this->t('Exact'),
+        'settings' => $this->t('Settings'),
       ],
     ];
 
@@ -119,6 +117,7 @@ final class ImageSettings extends SettingsBase {
       $width = $this->getValue(['dimensions', $size, 'width']);
       $height = $this->getValue(['dimensions', $size, 'height']);
       $exact = $this->getValue(['dimensions', $size, 'exact'], $width && $height);
+      $bg = $exact ? $this->getValue(['dimensions', $size, 'bg']) : NULL;
       $dimensionKey = [];
       if ($exact) {
         $dimensionKey[] = 'e';
@@ -128,6 +127,9 @@ final class ImageSettings extends SettingsBase {
       }
       if ($height) {
         $dimensionKey[] = 'h-' . $height;
+      }
+      if ($bg) {
+        $dimensionKey[] = 'bg-' . $bg;
       }
       $dimensionKey = implode('_', $dimensionKey);
       $style = $sizeOptionsByDimension[$dimensionKey] ?? NULL;
@@ -144,8 +146,14 @@ final class ImageSettings extends SettingsBase {
         '#default_value' => $style,
       ];
 
-      $form['dimensions'][$size]['width'] = [
+      $form['dimensions'][$size]['settings'] = [
+        '#type' => 'container',
+        '#neo_size' => 'xs',
+      ];
+
+      $form['dimensions'][$size]['settings']['width'] = [
         '#type' => 'number',
+        '#title' => $this->t('Width'),
         '#default_value' => $width,
         '#min' => 0,
         '#size' => 4,
@@ -156,8 +164,9 @@ final class ImageSettings extends SettingsBase {
           ],
         ],
       ];
-      $form['dimensions'][$size]['height'] = [
+      $form['dimensions'][$size]['settings']['height'] = [
         '#type' => 'number',
+        '#title' => $this->t('Height'),
         '#default_value' => $height,
         '#min' => 0,
         '#size' => 4,
@@ -168,14 +177,33 @@ final class ImageSettings extends SettingsBase {
           ],
         ],
       ];
-      $form['dimensions'][$size]['exact'] = [
+      $form['dimensions'][$size]['settings']['exact'] = [
         '#type' => 'checkbox',
+        '#title' => $this->t('Exact'),
         '#default_value' => $exact,
         '#states' => [
           'visible' => [
             ':input[name="' . $form['#input_selector'] . '[dimensions][' . $size . '][style]"]' => ['value' => ''],
-            ':input[name="' . $form['#input_selector'] . '[dimensions][' . $size . '][width]"]' => ['filled' => TRUE],
-            ':input[name="' . $form['#input_selector'] . '[dimensions][' . $size . '][height]"]' => ['filled' => TRUE],
+            ':input[name="' . $form['#input_selector'] . '[dimensions][' . $size . '][settings][width]"]' => ['filled' => TRUE],
+            ':input[name="' . $form['#input_selector'] . '[dimensions][' . $size . '][settings][height]"]' => ['filled' => TRUE],
+          ],
+        ],
+      ];
+      $form['dimensions'][$size]['settings']['bg'] = [
+        '#type' => 'textfield',
+        '#title' => $this->t('Background'),
+        '#description' => $this->t('A hex color value (e.g. #FF0000). Leave empty for a transparent canvas color.'),
+        '#default_value' => $bg,
+        '#size' => 10,
+        '#maxlength' => 7,
+        '#placeholder' => 'FFFFFF',
+        '#field_prefix' => '#',
+        '#states' => [
+          'visible' => [
+            ':input[name="' . $form['#input_selector'] . '[dimensions][' . $size . '][style]"]' => ['value' => ''],
+            ':input[name="' . $form['#input_selector'] . '[dimensions][' . $size . '][settings][width]"]' => ['filled' => TRUE],
+            ':input[name="' . $form['#input_selector'] . '[dimensions][' . $size . '][settings][height]"]' => ['filled' => TRUE],
+            ':input[name="' . $form['#input_selector'] . '[dimensions][' . $size . '][settings][exact]"]' => ['checked' => TRUE],
           ],
         ],
       ];
@@ -201,13 +229,18 @@ final class ImageSettings extends SettingsBase {
    */
   protected function validateForm(array $form, FormStateInterface $form_state) {
     foreach ($form_state->getValue(['dimensions']) as $size => $config) {
+      $config += $config['settings'];
+      unset($config['settings']);
+      $form_state->setValue(['dimensions', $size], $config);
       if (!empty($config['style'])) {
         $neoImageStyle = new NeoImageStyle();
         $neoImageStyle->setParameters($neoImageStyle->convertIdToParams($config['style']));
         $form_state->setValue(['dimensions', $size, 'width'], $neoImageStyle->getWidth() ?? '');
         $form_state->setValue(['dimensions', $size, 'height'], $neoImageStyle->getHeight() ?? '');
+        $form_state->setValue(['dimensions', $size, 'exact'], $neoImageStyle->isExact());
+        $form_state->setValue(['dimensions', $size, 'bg'], $neoImageStyle->getBg());
       }
-      if (empty($config['width']) || empty($config['height'])) {
+      elseif (empty($config['width']) || empty($config['height'])) {
         $form_state->setValue(['dimensions', $size, 'exact'], FALSE);
       }
       $form_state->unsetValue(['dimensions', $size, 'style']);

@@ -129,10 +129,10 @@ class NeoImageBaseFormatter extends EntityReferenceFormatterBase {
     $imageDimensions = $imageSettings['dimensions'] ?? [];
     if ($dimensionSummary = NeoImage::summaryFromDimensions($imageDimensions)) {
       $summary[] = $this->t('<strong>@label:</strong>', [
-        '@label' => $this->t('Thumbnail'),
+        '@label' => $this->t('Dimensions'),
       ]);
       foreach ($dimensionSummary as $sum) {
-        $summary[] = '-- ' . $sum;
+        $summary[] = $sum;
       }
     }
 

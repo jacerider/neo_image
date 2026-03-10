@@ -28,7 +28,8 @@ class ExactImageEffect extends ConfigurableImageEffectBase {
   public function defaultConfiguration() {
     return NestedArray::mergeDeep([
       'canvas_size' => 'exact',
-      'canvas_color' => NULL,
+      'canvas_color' => '',
+      'canvas_opacity' => 100,
       'exact' => [
         'width' => '',
         'height' => '',
@@ -49,19 +50,20 @@ class ExactImageEffect extends ConfigurableImageEffectBase {
    * {@inheritdoc}
    */
   public function getSummary() {
-    $data = $this->configuration;
+    $color = $this->configuration['canvas_color'] ?? '';
+    $color_label = $color ? $this->t('@color (@opacity%)', [
+      '@color' => $color,
+      '@opacity' => $this->configuration['canvas_opacity'] ?? 100,
+    ]) : $this->t('Transparent');
 
-    $data['color_info'] = [
-      '#theme' => 'image_effects_color_detail',
-      '#color' => $this->configuration['canvas_color'],
-      '#border' => TRUE,
-      '#border_color' => 'matchLuma',
+    $summary = [
+      '#markup' => $this->t('Canvas: @size, Color: @color', [
+        '@size' => $this->configuration['canvas_size'],
+        '@color' => $color_label,
+      ]),
     ];
 
-    return [
-      '#theme' => 'image_effects_set_canvas_summary',
-      '#data' => $data,
-    ] + parent::getSummary();
+    return $summary + parent::getSummary();
   }
 
   /**
@@ -193,12 +195,23 @@ class ExactImageEffect extends ConfigurableImageEffectBase {
 
     // Canvas color.
     $form['canvas_color'] = [
-      '#type' => 'image_effects_color',
+      '#type' => 'textfield',
       '#title' => $this->t('Canvas color'),
-      '#allow_null' => TRUE,
-      '#allow_opacity' => TRUE,
-      '#description'  => $this->t("This will have the effect of adding colored (or transparent) margins around the image."),
-      '#default_value' => $this->configuration['canvas_color'],
+      '#description' => $this->t('A hex color value (e.g. #FF0000). Leave empty for a transparent background.'),
+      '#default_value' => $this->configuration['canvas_color'] ?? '',
+      '#size' => 10,
+      '#maxlength' => 7,
+      '#placeholder' => '#FFFFFF',
+    ];
+    $form['canvas_opacity'] = [
+      '#type' => 'number',
+      '#title' => $this->t('Canvas opacity'),
+      '#description' => $this->t('Opacity of the canvas color, from 0 (transparent) to 100 (fully opaque).'),
+      '#default_value' => $this->configuration['canvas_opacity'] ?? 100,
+      '#min' => 0,
+      '#max' => 100,
+      '#step' => 1,
+      '#field_suffix' => '%',
     ];
 
     return $form;
@@ -209,6 +222,10 @@ class ExactImageEffect extends ConfigurableImageEffectBase {
    */
   public function validateConfigurationForm(array &$form, FormStateInterface $form_state) {
     parent::validateConfigurationForm($form, $form_state);
+    $canvas_color = trim($form_state->getValue('canvas_color', ''));
+    if ($canvas_color !== '' && !preg_match('/^#([0-9a-fA-F]{6})$/', $canvas_color)) {
+      $form_state->setErrorByName('canvas_color', $this->t('Canvas color must be a valid hex color (e.g. #FF0000) or left empty for transparent.'));
+    }
     $this->configuration = $form_state->getValues();
   }
 
@@ -217,7 +234,7 @@ class ExactImageEffect extends ConfigurableImageEffectBase {
    */
   public function applyEffect(ImageInterface $image) {
     $data = [];
-    $data['canvas_color'] = $this->configuration['canvas_color'];
+    $data['canvas_color'] = $this->getCanvasColorRgba();
 
     // Get resulting dimensions.
     $dimensions = $this->getDimensions($image->getWidth(), $image->getHeight());
@@ -267,6 +284,27 @@ class ExactImageEffect extends ConfigurableImageEffectBase {
     }
 
     ['width' => $dimensions['width'], 'height' => $dimensions['height']] = $this->getDimensions($dimensions['width'], $dimensions['height']);
+  }
+
+  /**
+   * Get the canvas color as an RGBA hex string.
+   *
+   * Combines the canvas_color (#RRGGBB) and canvas_opacity (0-100) into
+   * the #RRGGBBAA format expected by the draw_rectangle toolkit operation.
+   *
+   * @return string|null
+   *   The RGBA hex color string (e.g. '#FF0000FF'), or NULL for transparent.
+   */
+  protected function getCanvasColorRgba(): ?string {
+    $color = $this->configuration['canvas_color'] ?? '';
+    if (empty($color)) {
+      return NULL;
+    }
+    // Strip to 7-char hex in case it already has alpha.
+    $color = substr($color, 0, 7);
+    $opacity = $this->configuration['canvas_opacity'] ?? 100;
+    $alpha = (int) round(($opacity / 100) * 255);
+    return $color . str_pad(dechex($alpha), 2, '0', STR_PAD_LEFT);
   }
 
   /**

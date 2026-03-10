@@ -60,3 +60,7 @@ neo_image.dimensions:
     exact:
       type: boolean
       label: Exact
+    bg:
+      type: string
+      label: Background
+      nullable: true

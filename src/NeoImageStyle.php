@@ -62,6 +62,7 @@ class NeoImageStyle {
     'w' => 'width',
     'h' => 'height',
     'a' => 'anchor',
+    'bg' => 'background',
   ];
 
   /**
@@ -163,16 +164,18 @@ class NeoImageStyle {
    *   The height.
    * @param bool $exact
    *   If the size should be exact.
+   * @param string|null $bg
+   *   The background color for exact size, e.g. #ffffff or ffffff.
    *
    * @return $this
    */
-  public function auto($width = NULL, $height = NULL, $exact = FALSE):self {
+  public function auto($width = NULL, $height = NULL, $exact = FALSE, $bg = NULL):self {
     if (!$width && !$height) {
       throw new \InvalidArgumentException('Width or height must be set.');
     }
     if ($width && $height) {
       if ($exact) {
-        $this->exact($width, $height);
+        $this->exact($width, $height, NULL, $bg);
       }
       else {
         $this->focal($width, $height);
@@ -356,7 +359,7 @@ class NeoImageStyle {
    *
    * @return $this
    */
-  public function exact($width, $height, $anchor = NULL):self {
+  public function exact($width, $height, $anchor = NULL, $bg = NULL):self {
     $this->parameters['e']['w'] = (int) $width;
     $this->parameters['e']['h'] = (int) $height;
     if ($anchor) {
@@ -365,6 +368,11 @@ class NeoImageStyle {
         throw new \InvalidArgumentException('Invalid anchor value.');
       }
       $this->parameters['e']['a'] = $anchorKeys[$anchor];
+    }
+    if ($bg) {
+      // Background color for the canvas, e.g. #ffffff or ffffff. Remove # if
+      // present.
+      $this->parameters['e']['bg'] = ltrim($bg, '#');
     }
     return $this;
   }
@@ -380,6 +388,16 @@ class NeoImageStyle {
   }
 
   /**
+   * Get background color for exact size.
+   *
+   * @return string|null
+   *  The background color, e.g. #ffffff, or null if not set.
+   */
+  public function getBg():?string {
+    return $this->parameters['e']['bg'] ?? NULL;
+  }
+
+  /**
    * Preprocess exact.
    *
    * @param array $data
@@ -391,7 +409,7 @@ class NeoImageStyle {
   protected function preprocessExact(array $data):array {
     $data = [
       'canvas_size' => 'exact',
-      'canvas_color' => NULL,
+      'canvas_color' => !empty($data['background']) ? '#' . ltrim($data['background'], '#') : NULL,
       'exact' => [
         'width' => $data['width'] . 'px',
         'height' => $data['height'] . 'px',

@@ -180,6 +180,7 @@ final class NeoImage implements RenderableInterface {
         'width' => '',
         'height' => '',
         'exact' => FALSE,
+        'bg' => NULL,
         'achor' => '',
         'op' => 'auto',
       ];
@@ -224,6 +225,8 @@ final class NeoImage implements RenderableInterface {
       $settings += [
         'width' => '',
         'height' => '',
+        'exact' => FALSE,
+        'bg' => NULL,
       ];
       if (empty(array_filter($settings))) {
         continue;
@@ -247,6 +250,12 @@ final class NeoImage implements RenderableInterface {
           '@size' => $sizeLabel,
           '@height' => $settings['height'],
         ]);
+      }
+      if ($settings['exact']) {
+        $summary[count($summary) - 1] .= ' (exact)';
+      }
+      if ($settings['bg']) {
+        $summary[count($summary) - 1] .= ' (bg: #' . $settings['bg'] . ')';
       }
     }
     return $summary;
