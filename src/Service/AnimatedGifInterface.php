@@ -14,7 +14,7 @@ interface AnimatedGifInterface {
   /**
    * The minimum number of animated frames required.
    */
-  public const int MINIMUM_NUMBER_OF_ANIMATED_FRAMES = 2;
+  public const MINIMUM_NUMBER_OF_ANIMATED_FRAMES = 2;
 
   /**
    * Check if a file entity is an animated Gif.
