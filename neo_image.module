@@ -221,7 +221,10 @@ function template_preprocess_neo_image_style(&$variables) {
 
       // Inform the site builders why their image didn't work.
       \Drupal::logger('image')->warning('Could not apply @style image style to @uri because the style does not support it.', [
-        '@style' => $style->label(),
+        // Fall back to the machine name: an image style's label can be NULL,
+        // and a NULL placeholder value crashes FormattableMarkup (and with it
+        // the dblog report view) when the log entry is later rendered.
+        '@style' => $style->label() ?? $style->getName(),
         '@uri' => $uri,
       ]);
     }
