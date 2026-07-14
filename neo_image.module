@@ -157,17 +157,22 @@ function template_preprocess_neo_image_style(&$variables) {
   $uri = str_replace('/' . Settings::get('file_public_path', 'sites/default/files') . '/', 'public://', $variables['uri']);
 
   $animatedGif = new AnimatedGif();
-  if (NeoImageStyle::isExternalUri($uri) || $animatedGif->isAnAnimatedGif($uri)) {
-    $style = $neoImageStyle->getImageStyle();
-    $dimensions = [
-      'width' => 10000,
-      'height' => 10000,
-    ];
-    $style->transformDimensions($dimensions, $variables['uri']);
+  $isSvg = (bool) preg_match('/\.svg(?:[?#].*)?$/i', $uri);
+  if (NeoImageStyle::isExternalUri($uri) || $animatedGif->isAnAnimatedGif($uri) || $isSvg) {
+    // The source can't be turned into a styled derivative: it's an external
+    // URL, an animated GIF, or a vector SVG. Emit the original file as-is.
+    //
+    // We can't measure the source here (it isn't a local raster the image
+    // toolkit can read), so we can't compute a fitted size. Fall back to the
+    // dimensions explicitly declared on the style and leave the unspecified
+    // axis unset — the browser then derives it from the image's intrinsic
+    // aspect ratio. Seeding transformDimensions() with a square placeholder
+    // (the previous approach) forced any single-axis scale to a square, e.g.
+    // {scale: {height: 30}} rendering as width="30" height="30".
     $variables['image'] = [
       '#theme' => 'image',
-      '#width' => $dimensions['width'] !== 10000 ? $dimensions['width'] : NULL,
-      '#height' => $dimensions['height'] !== 10000 ? $dimensions['height'] : NULL,
+      '#width' => $neoImageStyle->getWidth(),
+      '#height' => $neoImageStyle->getHeight(),
       '#attributes' => $variables['attributes'],
       '#uri' => $variables['uri'],
     ];
