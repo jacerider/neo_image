@@ -358,8 +358,8 @@ final class NeoImage implements RenderableInterface {
     return [
       '#theme' => 'neo_image',
       '#neoImage' => $this,
-      '#title' => $alt ?? $this->title,
-      '#alt' => $title ?? $this->alt,
+      '#alt' => $alt ?? $this->alt,
+      '#title' => $title ?? $this->title,
       '#attributes' => $attributes,
     ];
   }
