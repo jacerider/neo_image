@@ -356,6 +356,8 @@ class NeoImageStyle {
    *   The height.
    * @param string $anchor
    *   Defaults to center-center.
+   * @param string|null $bg
+   *   (optional) Background color used to pad the image.
    *
    * @return $this
    */
@@ -391,7 +393,7 @@ class NeoImageStyle {
    * Get background color for exact size.
    *
    * @return string|null
-   *  The background color, e.g. #ffffff, or null if not set.
+   *   The background color, e.g. #ffffff, or null if not set.
    */
   public function getBg():?string {
     return $this->parameters['e']['bg'] ?? NULL;

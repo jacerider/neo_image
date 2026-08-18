@@ -6,8 +6,6 @@ namespace Drupal\neo_image\Service;
 
 use Drupal\Component\Utility\Bytes;
 use Drupal\file\FileInterface;
-use Psr\Log\LoggerInterface;
-use Symfony\Component\DependencyInjection\Attribute\Autowire;
 
 /**
  * Default animated gif service.
