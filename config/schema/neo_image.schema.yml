@@ -36,7 +36,20 @@ neo_image.base:
       label: Reverse
 
 neo_image.settings:
-  type: config_object
+  type: neo_image
+  mapping:
+    _core:
+      # Added by the config installer; only exists for merging config.
+      requiredKey: false
+      type: _core_config_info
+
+# Required by neo_settings.schema.yml, which resolves a variation's stored
+# settings via `type: neo_settings.settings.[%parent.plugin]`.
+neo_settings.settings.neo_image:
+  type: neo_image
+
+neo_image:
+  type: mapping
   label: 'Neo Image Settings'
   mapping:
     dimensions:
