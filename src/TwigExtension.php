@@ -10,6 +10,19 @@ use Twig\TwigFunction;
 
 /**
  * Defines Twig extensions.
+ *
+ * Every parameter and every return below carries a **documented type** and no
+ * declared one. phpstan level 6 is satisfied by a docblock exactly as it is by
+ * a signature, and a declared type is the only edit available here that could
+ * turn a value a template has always passed into a `TypeError` on the sites
+ * this package ships to. Each type is the **accepted shape** — the union of
+ * what call sites actually pass — and the prose beneath every one says what
+ * happens to everything else, because nothing is rejected.
+ *
+ * Array value types are spelled out literally rather than through a
+ * `@phpstan-type` alias, because many sites analyse this package with their
+ * own configurations and a tag some of those runs cannot resolve is worse
+ * than the repetition.
  */
 class TwigExtension extends AbstractExtension {
 
@@ -55,6 +68,24 @@ class TwigExtension extends AbstractExtension {
    * dispatch may run it once where the delegation it replaces ran it two or
    * three times, and it is asserted rather than assumed.
    *
+   * @param mixed $mixed
+   *   The subject the Twig function was handed. Only one shape is read here:
+   *   a string naming an external URL whose path ends `{width}x{height}.png`.
+   *   Every other subject in the union the public functions document — a
+   *   media entity, a file entity, NULL — and every value outside it comes
+   *   back untouched, which is why this parameter is `mixed` rather than that
+   *   union: this step forwards what it does not read.
+   * @param mixed $options
+   *   The options the Twig function was handed. A non-empty array is scanned
+   *   for the largest `width` and the largest `height` it names anywhere,
+   *   whether it is keyed by effect or by breakpoint. Anything else — an
+   *   empty array, a non-array, options naming no dimensions — leaves the
+   *   subject unchanged.
+   *
+   * @return mixed
+   *   The subject, rewritten only when every condition above held, and
+   *   otherwise exactly the value that arrived.
+   *
    * @see \Drupal\Tests\neo_image\Unit\PlaceholderSwapIdempotenceTest
    */
   protected static function placeholderSwap($mixed, $options = []) {
@@ -95,6 +126,39 @@ class TwigExtension extends AbstractExtension {
    * The placeholder swap runs here, once, before the shape is chosen — the
    * arrangement this replaces ran it once per hop of a two-way delegation.
    *
+   * @param string|\Drupal\media\MediaInterface|\Drupal\file\FileInterface|null $mixed
+   *   The image to render: a URI or web path string, a media entity, a file
+   *   entity, or nothing. Nothing is rejected — the type is documented, not
+   *   declared — so a subject outside this union, and NULL itself, reaches
+   *   whichever shape is chosen, matches neither of its guards and answers an
+   *   empty render array.
+   * @param mixed $options
+   *   The image options. An array is read two ways: keyed by effect —
+   *   `width`, `height`, `crop` and the rest the style setters name — it is a
+   *   single-style render, and keyed `sm`, `md`, `lg`, `xl` or `2xl`, each
+   *   holding its own effect-keyed array, it is a responsive render. The type
+   *   is `mixed` because a non-array really is accepted and really is ignored:
+   *   it is replaced with an empty array below. Documenting it as an array
+   *   would make that guard a phpstan finding, and deleting the guard is a
+   *   narrowing this file does not take.
+   * @param string|\Stringable|null $alt
+   *   The alt text: a string, a stringable — a `|t` in a template is the live
+   *   case — or NULL, which `neo_toolbar` passes explicitly at two call
+   *   sites. It is handed on untouched; what an empty value falls back to is
+   *   the image's business, not this layer's.
+   * @param string|\Stringable|null $title
+   *   The title text, on the same terms as the alt text.
+   * @param array<string, mixed>|\Drupal\Core\Template\Attribute $attributes
+   *   Attributes for the rendered image, keyed by attribute name. An
+   *   `Attribute` object is accepted as well — `neo_toolbar` passes one — and
+   *   is flattened to its array form here, before the shape is chosen, so
+   *   neither shape ever sees the object.
+   *
+   * @return array<string, mixed>
+   *   The render array: a responsive render when the options name
+   *   breakpoints, a single-style render otherwise, and an empty array for a
+   *   subject neither shape reads.
+   *
    * @see \Drupal\Tests\neo_image\Kernel\RenderDispatchEquivalenceTest
    */
   protected static function renderDispatch($mixed, $options = [], $alt = '', $title = '', $attributes = []) {
@@ -119,6 +183,27 @@ class TwigExtension extends AbstractExtension {
    * single-style render with *no* options at all: the breakpoint sizes are
    * dropped rather than carried across. The placeholder swap has already read
    * them by the time that happens.
+   *
+   * @param string|\Drupal\media\MediaInterface|\Drupal\file\FileInterface|null $mixed
+   *   The image to render, as the dispatch documents it. A subject outside
+   *   that union, and NULL itself, matches neither guard here and answers an
+   *   empty render array.
+   * @param array<string, mixed> $options
+   *   Breakpoint options: `sm`, `md`, `lg`, `xl` or `2xl`, each holding its
+   *   own effect-keyed array. The dispatch has already established that at
+   *   least one of those keys is present, and the placeholder swap has
+   *   already read every dimension in them.
+   * @param string|\Stringable|null $alt
+   *   The alt text, as the dispatch documents it.
+   * @param string|\Stringable|null $title
+   *   The title text, as the dispatch documents it.
+   * @param array<string, mixed> $attributes
+   *   Attributes for the rendered image, keyed by attribute name. The
+   *   dispatch has already flattened an `Attribute` object into this form.
+   *
+   * @return array<string, mixed>
+   *   The render array, or an empty array for a subject this shape does not
+   *   read.
    */
   protected static function responsiveRender($mixed, array $options, $alt, $title, $attributes) {
     if (is_string($mixed)) {
@@ -138,6 +223,28 @@ class TwigExtension extends AbstractExtension {
 
   /**
    * Builds the single-style render: one image under one style.
+   *
+   * @param string|\Drupal\media\MediaInterface|\Drupal\file\FileInterface|null $mixed
+   *   The image to render, as the dispatch documents it. A subject outside
+   *   that union, and NULL itself, matches neither guard here and answers an
+   *   empty render array.
+   * @param array<string, mixed> $options
+   *   Effect-keyed options — `width`, `height`, `crop` and the rest the style
+   *   setters name — handed straight to the style. What is *in* the array is
+   *   the style's business: a bad anchor or a scale with neither width nor
+   *   height raises from the setter, and nothing here catches it. An empty
+   *   array is the default style.
+   * @param string|\Stringable|null $alt
+   *   The alt text, as the dispatch documents it.
+   * @param string|\Stringable|null $title
+   *   The title text, as the dispatch documents it.
+   * @param array<string, mixed> $attributes
+   *   Attributes for the rendered image, keyed by attribute name. The
+   *   dispatch has already flattened an `Attribute` object into this form.
+   *
+   * @return array<string, mixed>
+   *   The render array, or an empty array for a subject this shape does not
+   *   read.
    */
   protected static function singleStyleRender($mixed, array $options, $alt, $title, $attributes) {
     if (is_string($mixed)) {
@@ -157,6 +264,30 @@ class TwigExtension extends AbstractExtension {
    * An exact synonym of renderImageStyle(). Both names answer whichever shape
    * the options ask for, and neither narrows to one.
    *
+   * @param string|\Drupal\media\MediaInterface|\Drupal\file\FileInterface|null $mixed
+   *   The image to render: a URI or web path string, a media entity, a file
+   *   entity, or nothing. The README documents the entity form,
+   *   `neo_alchemist`'s image shape supplies the string form and its
+   *   remote-video shape supplies the nothing. Nothing is rejected: a subject
+   *   outside this union, and NULL itself, answers an empty render array.
+   * @param mixed $options
+   *   The image options, as the dispatch documents them: effect-keyed
+   *   dimensions or breakpoint options, with a non-array accepted and
+   *   ignored.
+   * @param string|\Stringable|null $alt
+   *   The alt text: a string, a stringable — a `|t` in a template is the live
+   *   case — or NULL, which `neo_toolbar` passes explicitly at two call
+   *   sites.
+   * @param string|\Stringable|null $title
+   *   The title text, on the same terms as the alt text.
+   * @param array<string, mixed>|\Drupal\Core\Template\Attribute $attributes
+   *   Attributes for the rendered image, keyed by attribute name, or an
+   *   `Attribute` object, which `neo_toolbar` passes.
+   *
+   * @return array<string, mixed>
+   *   The render array, or an empty array for a subject this function does
+   *   not read.
+   *
    * @see docs/adr/0013-the-two-twig-render-functions-answer-the-same-thing.md
    */
   public static function renderImage($mixed, $options = [], $alt = '', $title = '', $attributes = []) {
@@ -168,6 +299,30 @@ class TwigExtension extends AbstractExtension {
    *
    * An exact synonym of renderImage(). Both names answer whichever shape the
    * options ask for, and neither narrows to one.
+   *
+   * @param string|\Drupal\media\MediaInterface|\Drupal\file\FileInterface|null $mixed
+   *   The image to render: a URI or web path string, a media entity, a file
+   *   entity, or nothing. The README documents the entity form,
+   *   `neo_alchemist`'s image shape supplies the string form and its
+   *   remote-video shape supplies the nothing. Nothing is rejected: a subject
+   *   outside this union, and NULL itself, answers an empty render array.
+   * @param mixed $options
+   *   The image options, as the dispatch documents them: effect-keyed
+   *   dimensions or breakpoint options, with a non-array accepted and
+   *   ignored.
+   * @param string|\Stringable|null $alt
+   *   The alt text: a string, a stringable — a `|t` in a template is the live
+   *   case — or NULL, which `neo_toolbar` passes explicitly at two call
+   *   sites.
+   * @param string|\Stringable|null $title
+   *   The title text, on the same terms as the alt text.
+   * @param array<string, mixed>|\Drupal\Core\Template\Attribute $attributes
+   *   Attributes for the rendered image, keyed by attribute name, or an
+   *   `Attribute` object, which `neo_toolbar` passes.
+   *
+   * @return array<string, mixed>
+   *   The render array, or an empty array for a subject this function does
+   *   not read.
    *
    * @see docs/adr/0013-the-two-twig-render-functions-answer-the-same-thing.md
    */
@@ -197,6 +352,28 @@ class TwigExtension extends AbstractExtension {
    * `$alt` and `$title` are accepted and ignored, because a URL carries no
    * alt. They stay because their position is the contract of every call site,
    * the module README and `neo_alchemist`'s generated per-prop Twig hints.
+   *
+   * @param string|\Drupal\media\MediaInterface|\Drupal\file\FileInterface|null $mixed
+   *   The image to resolve: a URI or web path string, a media entity, a file
+   *   entity, or nothing. Nothing is rejected: a subject outside this union,
+   *   and NULL itself, answers `''`.
+   * @param array<string, mixed> $options
+   *   Effect-keyed options — `width`, `height`, `crop` and the rest the style
+   *   setters name — handed straight to the style. This is the one Twig
+   *   function that declares this parameter and so rejects a non-array where
+   *   the two render functions ignore one; the inconsistency is recorded
+   *   rather than resolved, because removing the declaration is the only edit
+   *   in this file that could change a caller's answer.
+   * @param string|\Stringable|null $alt
+   *   Accepted and ignored. A URL carries no alt.
+   * @param string|\Stringable|null $title
+   *   Accepted and ignored. A URL carries no title.
+   *
+   * @return string
+   *   The URL, always a string: what the URI entry point answers for a string
+   *   subject, what the entity entry point answers for an entity one — `'#'`
+   *   included, which is that entry point's failure contract — and `''` for a
+   *   subject this function does not read.
    *
    * @see \Drupal\Tests\neo_image\Kernel\UrlFunctionAnswersAStringTest
    */
