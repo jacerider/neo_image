@@ -100,22 +100,6 @@ function template_preprocess_neo_image(&$variables) {
         $attribute->setAttribute('width', $dimensions['width']);
         $attribute->setAttribute('height', $dimensions['height']);
 
-        // Add WebP source if available.
-        // We now force WebP on the actual image style.
-        if (\Drupal::hasService('webp.webp') && FALSE) {
-          $webp = \Drupal::service('webp.webp');
-          $webpUri = $webp->getWebpSrcset($imageUri);
-          if ($imageUri !== $webpUri) {
-            // Never output a single image tag, because
-            // we will always have at least two sources.
-            $variables['output_image_tag'] = FALSE;
-            $webpAttribute = clone $attribute;
-            $webpAttribute->offsetSet('srcset', $webpUri);
-            $webpAttribute->offsetSet('type', 'image/webp');
-            $sources[$size . 'Webp'] = $webpAttribute;
-          }
-        }
-
         $sources[$size] = $attribute;
       }
     }

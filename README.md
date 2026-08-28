@@ -19,7 +19,17 @@ Improved responsive image handler along with other image enhancements.
 REQUIREMENTS
 ------------
 
-This module requires the webp contrib module.
+This module's requirements are the ones declared in `neo_image.info.yml`, and
+nothing else.
+
+Modern image formats come from Drupal core, automatically: a format conversion
+effect is appended to every image style this module generates - AVIF where the
+image toolkit supports it, WebP everywhere else. No contributed module is
+involved.
+
+The webp contrib module is optional. Nothing this module produces depends on
+it. When it is installed, it is used for one thing only: deleting the webp
+sidecar files it leaves beside a derivative when that derivative is flushed.
 
 - https://www.drupal.org/project/webp
 
@@ -67,8 +77,9 @@ There are 3 twig helpers available:
 RESPONSIVE IMAGE GENERATOR
 ---------
 
-Build a picture element that provides breakpoint media query images along with
-webp support.
+Build a picture element that provides breakpoint media query images. Its webp
+support comes from the format conversion effect appended to every generated
+image style, not from the picture element itself.
 
 ## From Media or File Entity
 
