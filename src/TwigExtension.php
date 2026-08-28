@@ -177,9 +177,30 @@ class TwigExtension extends AbstractExtension {
 
   /**
    * Render the neo image style.
+   *
+   * A URL in every case, including the cases that are not URLs. A string
+   * subject answers what the URI **entry point** answers and an entity subject
+   * what the entity **entry point** answers; a subject this function does not
+   * read answers `''`.
+   *
+   * That last answer used to be an empty array, which every caller then used
+   * as a URL — three of this site's heroes feed it straight into an inline
+   * `background-image`, so a slide saved without an image rendered
+   * `background-image: url('Array')`. NULL is how that subject arrives: an
+   * unset prop, or a template variable that was never defined.
+   *
+   * `''` is not `'#'`, and the difference is deliberate. `'#'` comes back from
+   * the entity entry point for a subject that *was* read and resolved to no
+   * file — the **failure contract** of a URL entry point, which throws
+   * nothing. Two states, two answers.
+   *
+   * `$alt` and `$title` are accepted and ignored, because a URL carries no
+   * alt. They stay because their position is the contract of every call site,
+   * the module README and `neo_alchemist`'s generated per-prop Twig hints.
+   *
+   * @see \Drupal\Tests\neo_image\Kernel\UrlFunctionAnswersAStringTest
    */
   public static function renderImageStyleUrl($mixed, array $options = [], $alt = '', $title = '') {
-    $build = [];
     $mixed = static::placeholderSwap($mixed, $options);
     if (is_string($mixed)) {
       $neoImageStyle = new NeoImageStyle($options);
@@ -189,7 +210,7 @@ class TwigExtension extends AbstractExtension {
       $neoImageStyle = new NeoImageStyle($options);
       return $neoImageStyle->toUrlFromEntity($mixed);
     }
-    return $build;
+    return '';
   }
 
 }
