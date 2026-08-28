@@ -6,6 +6,7 @@ namespace Drupal\Tests\neo_image\Kernel;
 
 use Drupal\Core\DependencyInjection\ContainerBuilder;
 use Drupal\Core\File\FileExists;
+use Drupal\Core\StreamWrapper\PublicStream;
 use Drupal\KernelTests\KernelTestBase;
 use Drupal\Tests\media\Traits\MediaTypeCreationTrait;
 use Drupal\file\Entity\File;
@@ -249,11 +250,12 @@ final class UrlEntryPointDerivativeEnsureTest extends KernelTestBase {
    * entry points agree, and nothing about pulling the **derivative ensure**
    * out of both is allowed to move that answer — with the flag or without it.
    *
-   * The `/sites/default/files/` rewrite is pinned here rather than left
-   * implicit. It sits on the line above the ensure block in both methods, it
-   * is a separate open candidate, and the ticket says to leave it: a diff that
-   * folded it in while extracting the ensure would be a path fix wearing a
-   * seam change's commit message.
+   * The **public-path rewrite** is pinned here rather than left implicit. It
+   * sat on the line above the ensure block in both methods and was a separate
+   * open candidate when this pin was written, so the pin recorded what the
+   * extraction was not allowed to move. That candidate has since landed: the
+   * rewrite is one helper reading the site's configured public path, and the
+   * literal below follows it.
    */
   public function testPublicFileAnswersTheSameUrlThroughBothEntryPoints(): void {
     $media = $this->createImageMedia();
@@ -266,10 +268,15 @@ final class UrlEntryPointDerivativeEnsureTest extends KernelTestBase {
     $this->assertSame($expected, $style->toUrlFromEntity($media), 'So does the entity entry point, for a media.');
     $this->assertSame($expected, $style->toUrlFromEntity($this->file), 'And for a bare file.');
 
-    // The public-path rewrite both methods carry, untouched by this ticket.
+    // The **public-path rewrite** the uri entry point carries. It was written
+    // against a hardcoded `sites/default/files` when this pin was first
+    // asserted, which is why the literal here used to be that path; it now
+    // reads the site's configured public path, so the pin is stated in the
+    // same terms the code is. Under this suite that is a non-default path, so
+    // the assertion is stronger than the one it replaces rather than weaker.
     $this->assertSame(
       $expected,
-      $style->toUrlFromUri('/sites/default/files/image-test.png'),
+      $style->toUrlFromUri('/' . PublicStream::basePath() . '/image-test.png'),
       'The uri entry point still rewrites a public file path before styling it.'
     );
 

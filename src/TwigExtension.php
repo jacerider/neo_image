@@ -82,7 +82,7 @@ class TwigExtension extends AbstractExtension {
       $attributes = $attributes->toArray();
     }
     if (is_string($mixed)) {
-      $uri = str_replace('/sites/default/files/', 'public://', $mixed);
+      $uri = NeoImageStyle::rewritePublicPath($mixed);
       if (NeoImageStyle::isExternalUri($uri)) {
         return self::renderImageStyle($mixed, [], $alt, $title, $attributes);
       }

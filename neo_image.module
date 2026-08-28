@@ -5,7 +5,6 @@
  * Primary module hooks for Neo Image module.
  */
 
-use Drupal\Core\Site\Settings;
 use Drupal\Core\StreamWrapper\StreamWrapperInterface;
 use Drupal\Core\Template\Attribute;
 use Drupal\neo_image\NeoImage;
@@ -154,7 +153,10 @@ function template_preprocess_neo_image(&$variables) {
 function template_preprocess_neo_image_style(&$variables) {
   /** @var \Drupal\neo_image\NeoImageStyle $neoImageStyle */
   $neoImageStyle = $variables['neoImageStyle'];
-  $uri = str_replace('/' . Settings::get('file_public_path', 'sites/default/files') . '/', 'public://', $variables['uri']);
+  // The theme variable is declared by `hook_theme()` and defaults to NULL, so
+  // it is coalesced rather than passed on: the rewrite takes a plain string,
+  // and the empty string is what the deprecated NULL call answered anyway.
+  $uri = NeoImageStyle::rewritePublicPath($variables['uri'] ?? '');
 
   $animatedGif = new AnimatedGif();
   $isSvg = (bool) preg_match('/\.svg(?:[?#].*)?$/i', $uri);

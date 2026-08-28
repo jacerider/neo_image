@@ -3,6 +3,7 @@
 namespace Drupal\neo_image;
 
 use Drupal\Component\Utility\UrlHelper;
+use Drupal\Core\StreamWrapper\PublicStream;
 use Drupal\file\FileInterface;
 use Drupal\image\Entity\ImageStyle;
 use Drupal\image\ImageStyleInterface;
@@ -854,6 +855,45 @@ class NeoImageStyle {
   }
 
   /**
+   * The **public-path rewrite**: a public-files web path becomes a stream URI.
+   *
+   * It lives beside `isExternalUri()` because it is that predicate's input
+   * normalisation: every caller hands the result straight to it on the next
+   * line. Without it a root-relative public-files URL — which is what a
+   * template's image `src` is, and therefore what every Twig **entry point**
+   * that takes a string actually receives — reads as external, and the
+   * **responsive render** and the URL entry points quietly stop producing
+   * derivatives.
+   *
+   * The base path comes from core's own accessor rather than a hand-written
+   * `sites/default/files`. Core resolves `file_public_path` when it is set and
+   * derives the path from the site path when it is not, so this is right on a
+   * multisite as well as on a site that moved its files directory. Re-deriving
+   * that default here would be the same mistake as hardcoding it, one level up.
+   *
+   * It is deliberately an unanchored substring replacement, exactly as the
+   * copies it replaces were. An absolute same-site URL containing the public
+   * path is still mangled, and a Drupal installed in a subdirectory still
+   * produces a corrupted URI. Both are pre-existing and both are now a one-line
+   * change in one place, which is what the extraction was for. Making either
+   * here would change what a caller receives, and break the constraint this
+   * ships on: a site running the default public path sees no difference at all.
+   *
+   * @param string $uri
+   *   The URI or path. A caller whose source may be absent coalesces to the
+   *   empty string rather than passing NULL: the parameter is a plain string
+   *   because the answer for "nothing" is the empty string either way.
+   *
+   * @return string
+   *   The stream URI, or the argument unchanged when it holds no public-files
+   *   web path — a stream URI of any scheme, an external URL, and a path
+   *   outside the public files directory all come back as they went in.
+   */
+  public static function rewritePublicPath(string $uri):string {
+    return str_replace('/' . PublicStream::basePath() . '/', 'public://', $uri);
+  }
+
+  /**
    * Render media or file as image.
    *
    * @param Drupal\media\MediaInterface|\Drupal\file\FileInterface $entity
@@ -943,7 +983,7 @@ class NeoImageStyle {
    *   the method `toUrlFromEntity()` delegates to; see `docs/adr/0011`.
    */
   public function toUrlFromUri(string $uri, bool $ensure = FALSE):string {
-    $uri = str_replace('/sites/default/files/', 'public://', $uri);
+    $uri = self::rewritePublicPath($uri);
     if (self::isExternalUri($uri)) {
       return $uri;
     }
