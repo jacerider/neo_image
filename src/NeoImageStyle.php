@@ -652,6 +652,21 @@ class NeoImageStyle {
    */
   public function toRenderableFromEntity(MediaInterface|FileInterface $entity, $alt = NULL, $title = NULL, $attributes = []):array {
     $build = [];
+    // The authored alt and title come from the one derivation both renders
+    // share, so this render answers what the responsive render answers for the
+    // same subject. It is read from the subject itself, before the thumbnail
+    // file replaces it below. An empty supplied value counts as unsupplied:
+    // every Twig entry point defaults its alt argument to the empty string, so
+    // a fallback that only caught NULL would be inert on exactly those paths.
+    // Where the entity authored nothing there is nothing to fall back to, so
+    // the supplied value survives as itself.
+    $authored = NeoImageUtility::authoredAltAndTitle($entity);
+    if ($alt === NULL || $alt === '') {
+      $alt = $authored['alt'] ?? $alt;
+    }
+    if ($title === NULL || $title === '') {
+      $title = $authored['title'] ?? $title;
+    }
     if ($entity instanceof MediaInterface) {
       /** @var \Drupal\media\MediaInterface $entity */
       $entity = $entity->get('thumbnail')->entity;
