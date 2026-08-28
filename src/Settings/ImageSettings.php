@@ -6,7 +6,6 @@ use Drupal\Core\Form\FormBuilderInterface;
 use Drupal\Core\Form\FormStateInterface;
 use Drupal\Core\Messenger\MessengerInterface;
 use Drupal\neo_image\NeoImage;
-use Drupal\neo_image\NeoImageStyle;
 use Drupal\neo_image\NeoImageStyleManager;
 use Drupal\neo_settings\Plugin\SettingsBase;
 use Symfony\Component\DependencyInjection\ContainerInterface;
@@ -37,6 +36,14 @@ final class ImageSettings extends SettingsBase {
 
   /**
    * {@inheritdoc}
+   *
+   * The style manager is required rather than optional, which phpstan's plugin
+   * rule objects to. It is required because there is no honest fallback: the
+   * only alternative is a container lookup in the body, which is the very thing
+   * `create()` exists to avoid and which phpcs would then object to in turn.
+   * Every instance of this plugin comes from `create()`.
+   *
+   * @phpstan-ignore parameter.notOptional
    */
   public function __construct(
     array $configuration,
@@ -226,8 +233,16 @@ final class ImageSettings extends SettingsBase {
 
   /**
    * {@inheritdoc}
+   *
+   * This form is no longer a **codec** consumer. It used to re-parse the id its
+   * own select had just handed it, which was both a third call site into the
+   * **id grammar** and — once the grammar started refusing — a place a tampered
+   * submission could throw inside an admin form. It asks the **style manager**
+   * for the style it already parsed instead, so a value the manager does not
+   * know is reported on the form rather than fataling it.
    */
   protected function validateForm(array $form, FormStateInterface $form_state) {
+    $styles = $this->styleManager->getStyles();
     foreach ($form_state->getValue(['dimensions']) as $size => $config) {
       $config += $config['settings'];
       unset($config['settings']);
@@ -237,8 +252,15 @@ final class ImageSettings extends SettingsBase {
       }
       $form_state->setValue(['dimensions', $size], $config);
       if (!empty($config['style'])) {
-        $neoImageStyle = new NeoImageStyle();
-        $neoImageStyle->setParameters($neoImageStyle->convertIdToParams($config['style']));
+        if (!isset($styles[$config['style']])) {
+          // The select's options come from the manager, so a value it does not
+          // know arrived by tampering or from a directory the manager skipped.
+          $form_state->setError($form['dimensions'][$size]['style'], $this->t('%style is not an image size this site can build.', [
+            '%style' => $config['style'],
+          ]));
+          continue;
+        }
+        $neoImageStyle = $styles[$config['style']];
         $form_state->setValue(['dimensions', $size, 'width'], $neoImageStyle->getWidth() ?? '');
         $form_state->setValue(['dimensions', $size, 'height'], $neoImageStyle->getHeight() ?? '');
         $form_state->setValue(['dimensions', $size, 'exact'], $neoImageStyle->isExact());
@@ -253,9 +275,14 @@ final class ImageSettings extends SettingsBase {
 
   /**
    * {@inheritdoc}
+   *
+   * Directory names from disk, not styles the manager parsed. A directory the
+   * **id grammar** refuses is skipped by `getStyles()`, so iterating styles
+   * here would have made the junk this plan stops creating undeletable through
+   * the one button a site owner has for it. This is that cleanup path.
    */
   public function flushImageStyles(array &$form, FormStateInterface $form_state) {
-    foreach ($this->styleManager->getStyles() as $name => $style) {
+    foreach ($this->styleManager->getStyleNames() as $name) {
       $this->styleManager->flushStyle($name);
     }
   }

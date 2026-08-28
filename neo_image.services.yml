@@ -5,6 +5,7 @@ services:
       - { name: event_subscriber }
   neo_image.param_converter:
     class: Drupal\neo_image\Routing\NeoImageStyleConverter
+    arguments: ['@entity_type.manager']
     tags:
       - { name: paramconverter }
   logger.channel.neo_image:
@@ -15,7 +16,7 @@ services:
     arguments: ['neo_image']
   neo_image.style_manager:
     class: Drupal\neo_image\NeoImageStyleManager
-    arguments: ['@stream_wrapper_manager', '@file_system']
+    arguments: ['@stream_wrapper_manager', '@file_system', '@logger.channel.neo_image']
   neo_image.twig_extension:
     class: Drupal\neo_image\TwigExtension
     tags:
