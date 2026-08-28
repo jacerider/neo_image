@@ -14,6 +14,45 @@ use Drupal\media\MediaTypeInterface;
 abstract class NeoImageUtility {
 
   /**
+   * Resolves the file an image is built from.
+   *
+   * The single **resolved file** step every **entry point** delegates to.
+   * Given a media it answers the media's thumbnail, given a file it answers
+   * that file, and where there is neither it answers nothing. Four entry
+   * points used to answer this privately and all four answered it the same
+   * way; what differed was only how each reported the empty case, so this is
+   * an extraction and not a change of resolution.
+   *
+   * It **never throws**, which is what lets a caller branch rather than catch.
+   * The three **failure contracts** live in the entry points, each matching
+   * the shape of what that entry point returns; this step has one answer and
+   * one absence.
+   *
+   * It answers **entities, not the filesystem**. "No file" means the entity
+   * reference is absent or is not a file — there is no `file_exists`, no
+   * readability check and no derivative check, because none of the four entry
+   * points ever performed one and a stat per render is a cost nobody asked
+   * for.
+   *
+   * Its parameter stays narrow on purpose. A caller holding some other entity
+   * narrows it first; widening this signature would only move that narrowing
+   * inside and call the drift fixed.
+   *
+   * @param \Drupal\media\MediaInterface|\Drupal\file\FileInterface $entity
+   *   The media or file entity to resolve.
+   *
+   * @return \Drupal\file\FileInterface|null
+   *   The file the image is built from, or NULL where there is none.
+   */
+  public static function resolvedFile(MediaInterface|FileInterface $entity): ?FileInterface {
+    if (!$entity instanceof MediaInterface) {
+      return $entity;
+    }
+    $file = $entity->get('thumbnail')->entity;
+    return $file instanceof FileInterface ? $file : NULL;
+  }
+
+  /**
    * Reads the alt and title an editor authored on an entity's image.
    *
    * The single derivation both renders use. Both properties come from the same

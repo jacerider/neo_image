@@ -86,6 +86,18 @@ final class NeoImage implements RenderableInterface {
   /**
    * Creates a new Image object from a media entity.
    *
+   * The **failure contract** of this **entry point** is a throw, and it is a
+   * throw because a factory must answer an object and has none to answer. A
+   * caller that would rather branch than catch asks
+   * `NeoImageUtility::resolvedFile()` first: it answers the same question this
+   * builds on and never throws.
+   *
+   * It throws for exactly one reason — the **resolved file** step answered
+   * nothing. It used to throw for a second, a missing source field item
+   * reported as a missing file, which was a message about a lookup this method
+   * never performed; a media with an empty source field and a valid thumbnail
+   * renders that thumbnail instead.
+   *
    * @param \Drupal\media\MediaInterface|\Drupal\file\FileInterface $entity
    *   The media entity.
    * @param string|null $alt
@@ -94,34 +106,30 @@ final class NeoImage implements RenderableInterface {
    *   The title.
    *
    * @return $this
+   *
+   * @throws \InvalidArgumentException
+   *   When the entity resolves to no file.
    */
   public static function createFromEntity(MediaInterface|FileInterface $entity, $alt = NULL, $title = NULL): static {
-    if ($entity instanceof MediaInterface) {
-      /** @var \Drupal\media\MediaInterface $entity */
-      $fieldDefinition = $entity->getSource()->getSourceFieldDefinition($entity->bundle->entity);
-      $item = $entity->get($fieldDefinition->getName())->first();
-      if (!$item) {
-        throw new \InvalidArgumentException('The media entity does not have a file.');
-      }
-      // The authored alt and title come from the one derivation both renders
-      // share. An empty supplied value counts as unsupplied: every Twig entry
-      // point defaults its alt argument to the empty string, so a fallback
-      // that only caught NULL would be inert on exactly those paths. Where the
-      // entity authored nothing there is nothing to fall back to, so the
-      // supplied value survives as itself.
-      $authored = NeoImageUtility::authoredAltAndTitle($entity);
-      if ($alt === NULL || $alt === '') {
-        $alt = $authored['alt'] ?? $alt;
-      }
-      if ($title === NULL || $title === '') {
-        $title = $authored['title'] ?? $title;
-      }
-      $entity = $entity->get('thumbnail')->entity;
-      if (!$entity) {
-        throw new \InvalidArgumentException('The media entity does not have a thumbnail.');
-      }
+    // The authored alt and title come from the one derivation both renders
+    // share, and are read from the subject itself rather than from the file it
+    // resolves to. An empty supplied value counts as unsupplied: every Twig
+    // entry point defaults its alt argument to the empty string, so a fallback
+    // that only caught NULL would be inert on exactly those paths. Where the
+    // entity authored nothing there is nothing to fall back to, so the
+    // supplied value survives as itself.
+    $authored = NeoImageUtility::authoredAltAndTitle($entity);
+    if ($alt === NULL || $alt === '') {
+      $alt = $authored['alt'] ?? $alt;
     }
-    return new static($entity->getFileUri(), $alt, $title);
+    if ($title === NULL || $title === '') {
+      $title = $authored['title'] ?? $title;
+    }
+    $file = NeoImageUtility::resolvedFile($entity);
+    if (!$file) {
+      throw new \InvalidArgumentException('The entity does not resolve to a file.');
+    }
+    return new static($file->getFileUri(), $alt, $title);
   }
 
   /**

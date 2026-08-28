@@ -115,6 +115,13 @@ class NeoImageStyle {
   /**
    * Get image style URL for a media entity.
    *
+   * The **failure contract** of this **entry point** is a throw, which is the
+   * fourth behaviour of the four this module used to carry and the one that
+   * does not match its return shape: every other URL entry point answers
+   * `'#'`. It keeps the throw — changing it would be a behaviour change on a
+   * method with no caller here — and it is a strict subset of
+   * `toUrlFromEntity()`, which is the one to reach for.
+   *
    * @param \Drupal\media\MediaInterface $media
    *   The media object containing the thumbnail file.
    *
@@ -122,14 +129,14 @@ class NeoImageStyle {
    *   The URL of the media entity.
    *
    * @throws \InvalidArgumentException
-   *   If the media entity does not have a thumbnail file.
+   *   When the media resolves to no file.
    */
   public function buildUrlForMedia(MediaInterface $media):string {
-    $file = $media->get('thumbnail')->entity;
-    if ($file instanceof FileInterface) {
-      return $this->getImageStyle()->buildUrl($file->getFileUri());
+    $file = NeoImageUtility::resolvedFile($media);
+    if (!$file) {
+      throw new \InvalidArgumentException('The media entity does not have a thumbnail file.');
     }
-    throw new \InvalidArgumentException('The media entity does not have a thumbnail file.');
+    return $this->getImageStyle()->buildUrl($file->getFileUri());
   }
 
   /**
@@ -648,16 +655,19 @@ class NeoImageStyle {
    *   The attributes.
    *
    * @return array
-   *   The renderable array.
+   *   The renderable array. Empty when the entity resolves to no file — the
+   *   **failure contract** of a render **entry point**, which renders nothing
+   *   and throws nothing. A caller that wants to know it happened asks
+   *   `NeoImageUtility::resolvedFile()` first.
    */
   public function toRenderableFromEntity(MediaInterface|FileInterface $entity, $alt = NULL, $title = NULL, $attributes = []):array {
     $build = [];
     // The authored alt and title come from the one derivation both renders
     // share, so this render answers what the responsive render answers for the
-    // same subject. It is read from the subject itself, before the thumbnail
-    // file replaces it below. An empty supplied value counts as unsupplied:
-    // every Twig entry point defaults its alt argument to the empty string, so
-    // a fallback that only caught NULL would be inert on exactly those paths.
+    // same subject. It is read from the subject itself rather than from the
+    // file it resolves to. An empty supplied value counts as unsupplied: every
+    // Twig entry point defaults its alt argument to the empty string, so a
+    // fallback that only caught NULL would be inert on exactly those paths.
     // Where the entity authored nothing there is nothing to fall back to, so
     // the supplied value survives as itself.
     $authored = NeoImageUtility::authoredAltAndTitle($entity);
@@ -667,24 +677,18 @@ class NeoImageStyle {
     if ($title === NULL || $title === '') {
       $title = $authored['title'] ?? $title;
     }
-    if ($entity instanceof MediaInterface) {
-      /** @var \Drupal\media\MediaInterface $entity */
-      $entity = $entity->get('thumbnail')->entity;
-      if (!$entity) {
-        return $build;
-      }
+    $file = NeoImageUtility::resolvedFile($entity);
+    if (!$file) {
+      return $build;
     }
-    if ($entity instanceof FileInterface) {
-      $build = [
-        '#theme' => 'neo_image_style',
-        '#neoImageStyle' => $this,
-        '#uri' => $entity->getFileUri(),
-        '#alt' => $alt,
-        '#title' => $title,
-        '#attributes' => $attributes,
-      ];
-    }
-    return $build;
+    return [
+      '#theme' => 'neo_image_style',
+      '#neoImageStyle' => $this,
+      '#uri' => $file->getFileUri(),
+      '#alt' => $alt,
+      '#title' => $title,
+      '#attributes' => $attributes,
+    ];
   }
 
   /**
@@ -753,24 +757,26 @@ class NeoImageStyle {
    *   Whether to ensure the image style derivative exists.
    *
    * @return string
-   *   The generated URL for the image style, or '#' if the entity is not a
-   *   valid file.
+   *   The generated URL for the image style, or `'#'` when the entity resolves
+   *   to no file — the **failure contract** of a URL **entry point**, which
+   *   throws nothing. A caller that wants to know it happened asks
+   *   `NeoImageUtility::resolvedFile()` first.
    */
   public function toUrlFromEntity(MediaInterface|FileInterface $entity, $ensure = FALSE):string {
-    $file = $entity instanceof MediaInterface ? $entity->get('thumbnail')->entity : $entity;
-    if ($file instanceof FileInterface) {
-      $uri = $file->getFileUri();
-      $uri = str_replace('/sites/default/files/', 'public://', $uri);
-      $style = $this->getImageStyle();
-      if ($ensure) {
-        $styleUri = $style->buildUri($uri);
-        if (!file_exists($styleUri)) {
-          $style->createDerivative($uri, $styleUri);
-        }
-      }
-      return $style->buildUrl($uri);
+    $file = NeoImageUtility::resolvedFile($entity);
+    if (!$file) {
+      return '#';
     }
-    return '#';
+    $uri = $file->getFileUri();
+    $uri = str_replace('/sites/default/files/', 'public://', $uri);
+    $style = $this->getImageStyle();
+    if ($ensure) {
+      $styleUri = $style->buildUri($uri);
+      if (!file_exists($styleUri)) {
+        $style->createDerivative($uri, $styleUri);
+      }
+    }
+    return $style->buildUrl($uri);
   }
 
 }
