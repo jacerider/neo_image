@@ -176,68 +176,91 @@ function template_preprocess_neo_image_style(&$variables) {
       '#attributes' => $variables['attributes'],
       '#uri' => $variables['uri'],
     ];
-    return;
-  }
-
-  // Convert the URI to a stream wrapper URI.
-  $variables['uri'] = str_replace('/sites/default/files/', 'public://', $variables['uri']);
-
-  // Determine the dimensions of the styled image.
-  /** @var \Drupal\Core\Image\Image $image */
-  $image = \Drupal::service('image.factory')->get($uri);
-  $dimensions = [
-    'width' => $image->getWidth(),
-    'height' => $image->getHeight(),
-  ];
-
-  if ($neoImageStyle->getEffectCount() === 0) {
-    // We do not have any effects. Render raw.
-    $variables['image'] = [
-      '#theme' => 'image',
-      '#width' => $dimensions['width'],
-      '#height' => $dimensions['height'],
-      '#attributes' => $variables['attributes'],
-      '#uri' => $uri,
-    ];
+    // This branch used to return here, and that return was an exit from the
+    // alt and title rules: a caller's values were assembled above and then
+    // discarded on the way past, which is why a site whose logo defaults to an
+    // SVG ships its most prominent image with no alt at all. It now falls
+    // through to the assignment below and gains nothing else — the dimensions
+    // decision above and the as-is URI are untouched.
+    //
+    // Title reaches this branch for the first time, so it reaches it with the
+    // emission the branch already has: an empty title stays an omitted
+    // attribute. It is alt that gets a floor, not title.
+    if (($variables['title'] ?? NULL) === '') {
+      $variables['title'] = NULL;
+    }
   }
   else {
-    $style = $neoImageStyle->getImageStyle();
-    $style->transformDimensions($dimensions, $uri);
+    // Convert the URI to a stream wrapper URI.
+    $variables['uri'] = str_replace('/sites/default/files/', 'public://', $variables['uri']);
 
-    $variables['image'] = [
-      '#theme' => 'image',
-      '#width' => $dimensions['width'],
-      '#height' => $dimensions['height'],
-      '#attributes' => $variables['attributes'],
-      '#style_name' => $style->getName(),
+    // Determine the dimensions of the styled image.
+    /** @var \Drupal\Core\Image\Image $image */
+    $image = \Drupal::service('image.factory')->get($uri);
+    $dimensions = [
+      'width' => $image->getWidth(),
+      'height' => $image->getHeight(),
     ];
 
-    // If the current image toolkit supports this file type, prepare the URI for
-    // the derivative image. If not, just use the original image resized to the
-    // dimensions specified by the style.
-    if ($style->supportsUri($uri)) {
-      $variables['image']['#uri'] = $style->buildUrl($uri);
+    if ($neoImageStyle->getEffectCount() === 0) {
+      // We do not have any effects. Render raw.
+      $variables['image'] = [
+        '#theme' => 'image',
+        '#width' => $dimensions['width'],
+        '#height' => $dimensions['height'],
+        '#attributes' => $variables['attributes'],
+        '#uri' => $uri,
+      ];
     }
     else {
-      $variables['image']['#uri'] = $uri;
-      // Don't render the image by default, but allow other preprocess functions
-      // to override that if they need to.
-      $variables['image']['#access'] = FALSE;
+      $style = $neoImageStyle->getImageStyle();
+      $style->transformDimensions($dimensions, $uri);
 
-      // Inform the site builders why their image didn't work.
-      \Drupal::logger('image')->warning('Could not apply @style image style to @uri because the style does not support it.', [
-        // Fall back to the machine name: an image style's label can be NULL,
-        // and a NULL placeholder value crashes FormattableMarkup (and with it
-        // the dblog report view) when the log entry is later rendered.
-        '@style' => $style->label() ?? $style->getName(),
-        '@uri' => $uri,
-      ]);
+      $variables['image'] = [
+        '#theme' => 'image',
+        '#width' => $dimensions['width'],
+        '#height' => $dimensions['height'],
+        '#attributes' => $variables['attributes'],
+        '#style_name' => $style->getName(),
+      ];
+
+      // If the current image toolkit supports this file type, prepare the
+      // URI for the derivative image. If not, just use the original image
+      // resized to the dimensions specified by the style.
+      if ($style->supportsUri($uri)) {
+        $variables['image']['#uri'] = $style->buildUrl($uri);
+      }
+      else {
+        $variables['image']['#uri'] = $uri;
+        // Don't render the image by default, but allow other preprocess
+        // functions to override that if they need to.
+        $variables['image']['#access'] = FALSE;
+
+        // Inform the site builders why their image didn't work.
+        \Drupal::logger('image')->warning('Could not apply @style image style to @uri because the style does not support it.', [
+          // Fall back to the machine name: an image style's label can be NULL,
+          // and a NULL placeholder value crashes FormattableMarkup (and with it
+          // the dblog report view) when the log entry is later rendered.
+          '@style' => $style->label() ?? $style->getName(),
+          '@uri' => $uri,
+        ]);
+      }
     }
   }
 
-  if (\array_key_exists('alt', $variables)) {
-    $variables['image']['#alt'] = $variables['alt'];
-  }
+  // The alt floor. Every `<img>` this module emits carries an alt attribute,
+  // and both renders converge here — the responsive render's controlling image
+  // is a single-style render — so this one assignment covers all of them.
+  // `<source>` elements take no alt and are untouched. An alt that arrives as
+  // NULL would be assigned as NULL and Drupal's image preprocess skips a NULL,
+  // so the attribute would never appear; the empty string is a decorative
+  // image, which is a claim a reader can act on, rather than an absent
+  // attribute, which is a defect an audit reports.
+  $variables['image']['#alt'] = $variables['alt'] ?? '';
+
+  // Title gets no floor. It keeps the emission it already has on every branch:
+  // `title=""` is cosmetic noise rather than an accessibility defect, so
+  // neither adding it nor removing it earns the markup diff.
   if (\array_key_exists('title', $variables)) {
     $variables['image']['#title'] = $variables['title'];
   }
