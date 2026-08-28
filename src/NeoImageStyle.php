@@ -22,67 +22,141 @@ class NeoImageStyle {
   protected array $parameters = [];
 
   /**
-   * The conversion keys.
+   * The **id grammar**, one declaration per effect.
+   *
+   * This is the vocabulary *and* the rules, deliberately in one array rather
+   * than in parallel arrays beside each other. A validator that keeps a second
+   * copy of the vocabulary it validates against is a vocabulary that drifts,
+   * and a drifted grammar answers 404 for ids this module itself produced. A
+   * ninth effect is one entry here and nothing else.
+   *
+   * Nothing in it is invented. Every rule is read off the setter that produces
+   * the effect: `id` and `label` are what the effect builds and what an editor
+   * reads, `allowed` is the properties that setter can set, `required` is the
+   * ones it always sets, and `required_any` — declared by `s` alone — is
+   * `scale()`'s own rule that a width or a height must be given, though not
+   * both. So the grammar rejects nothing the module can build.
    *
    * @var array
    */
-  protected array $effectKeys = [
-    'r' => 'image_resize',
-    's' => 'image_scale',
-    'c' => 'image_crop',
-    'cs' => 'image_crop_sides',
-    'sc' => 'image_scale_and_crop',
-    'f' => 'focal_point_scale_and_crop',
-    'fw' => 'focal_point_crop_by_width',
-    'e' => 'exact',
-  ];
-
-  /**
-   * The conversion labels.
-   *
-   * @var array
-   */
-  protected array $effectLabels = [
-    'r' => 'Resize',
-    's' => 'Scale',
-    'c' => 'Crop',
-    'cs' => 'Crop Sides',
-    'sc' => 'Scale and Crop',
-    'f' => 'Focal Scale and Crop',
-    'fw' => 'Focal Scale by Width',
-    'e' => 'Exact',
-  ];
-
-  /**
-   * The property keys.
-   *
-   * @var array
-   */
-  protected array $propertyKeys = [
-    'w' => 'width',
-    'h' => 'height',
-    'a' => 'anchor',
-    'bg' => 'background',
-  ];
-
-  /**
-   * The anchor keys.
-   *
-   * @var array
-   */
-  protected array $valueKeys = [
-    'a' => [
-      'lt' => 'left-top',
-      'ct' => 'center-top',
-      'rt' => 'right-top',
-      'l' => 'left-center',
-      'c' => 'center-center',
-      'r' => 'right-center',
-      'lb' => 'left-bottom',
-      'cb' => 'center-bottom',
-      'rb' => 'right-bottom',
+  protected array $effects = [
+    'r' => [
+      'id' => 'image_resize',
+      'label' => 'Resize',
+      'allowed' => ['w', 'h'],
+      'required' => ['w', 'h'],
+    ],
+    's' => [
+      'id' => 'image_scale',
+      'label' => 'Scale',
+      'allowed' => ['w', 'h'],
+      'required' => [],
+      'required_any' => ['w', 'h'],
+    ],
+    'c' => [
+      'id' => 'image_crop',
+      'label' => 'Crop',
+      'allowed' => ['w', 'h', 'a'],
+      'required' => ['w', 'h'],
+    ],
+    'cs' => [
+      'id' => 'image_crop_sides',
+      'label' => 'Crop Sides',
+      'allowed' => [],
+      'required' => [],
+    ],
+    'sc' => [
+      'id' => 'image_scale_and_crop',
+      'label' => 'Scale and Crop',
+      'allowed' => ['w', 'h', 'a'],
+      'required' => ['w', 'h'],
+    ],
+    'f' => [
+      'id' => 'focal_point_scale_and_crop',
+      'label' => 'Focal Scale and Crop',
+      'allowed' => ['w', 'h'],
+      'required' => ['w', 'h'],
+    ],
+    'fw' => [
+      'id' => 'focal_point_crop_by_width',
+      'label' => 'Focal Scale by Width',
+      'allowed' => ['w'],
+      'required' => ['w'],
+    ],
+    'e' => [
+      'id' => 'exact',
+      'label' => 'Exact',
+      'allowed' => ['w', 'h', 'a', 'bg'],
+      'required' => ['w', 'h'],
     ],
   ];
+
+  /**
+   * The property vocabulary and the rule each property's value must satisfy.
+   *
+   * The codec validates what the codec owns and nothing else. A width or a
+   * height must be the digits an integer cast answers, because every setter
+   * casts them — which is also why the parse casts them back. An anchor must be
+   * one of the nine short keys, because every setter that takes one already
+   * throws on anything else, and `values` is the single list all of them read.
+   *
+   * A background is required only to be non-empty and inside the id's own
+   * alphabet. It is deliberately *not* validated as a hex colour: a colour is
+   * the caller's value and reaches this class straight from a Twig template, so
+   * a colour typo answering 404 would be a worse failure than the wrong
+   * background it produces instead.
+   *
+   * @var array
+   */
+  protected array $properties = [
+    'w' => [
+      'label' => 'width',
+      'type' => 'integer',
+    ],
+    'h' => [
+      'label' => 'height',
+      'type' => 'integer',
+    ],
+    'a' => [
+      'label' => 'anchor',
+      'type' => 'string',
+      'values' => [
+        'lt' => 'left-top',
+        'ct' => 'center-top',
+        'rt' => 'right-top',
+        'l' => 'left-center',
+        'c' => 'center-center',
+        'r' => 'right-center',
+        'lb' => 'left-bottom',
+        'cb' => 'center-bottom',
+        'rb' => 'right-bottom',
+      ],
+    ],
+    'bg' => [
+      'label' => 'background',
+      'type' => 'string',
+    ],
+  ];
+
+  /**
+   * The prefix every id this module owns carries.
+   */
+  protected const ID_PREFIX = 'neo-';
+
+  /**
+   * The characters an id value may be made of.
+   */
+  protected const VALUE_ALPHABET = '/^[A-Za-z0-9]+$/';
+
+  /**
+   * The digits an integer cast answers, with no redundant leading zero.
+   *
+   * Leading zeros are refused rather than tolerated because `w-0300` would
+   * serialise back as `w-300`, and an id that comes back out as a different
+   * string is exactly the **round-trip safety** failure the grammar exists to
+   * close. No setter can produce one.
+   */
+  protected const INTEGER_VALUE = '/^(0|[1-9][0-9]*)$/';
 
   /**
    * Constructs a new image style.
@@ -134,6 +208,7 @@ class NeoImageStyle {
    * @deprecated in neo_image:1.1.0 and is removed from neo_image:2.0.0. Use
    *   \Drupal\neo_image\NeoImageStyle::toUrlFromEntity() instead.
    *
+   * @phpcs:ignore Drupal.Commenting.Deprecated.DeprecatedWrongSeeUrlFormat
    * @see \Drupal\neo_image\NeoImageStyle::toUrlFromEntity()
    */
   public function buildUrlForMedia(MediaInterface $media):string {
@@ -159,10 +234,12 @@ class NeoImageStyle {
     $label = [];
     foreach ($this->getParameters() as $effect => $config) {
       $effectLabel = [];
-      foreach ($config as $property => $value) {
-        $effectLabel[] = $this->propertyKeys[$property] . ': ' . ($this->valueKeys[$property][$value] ?? $value);
+      // An effect that carries no properties stores a sentinel rather than a
+      // property array, so it is labelled by its own name alone.
+      foreach (is_array($config) ? $config : [] as $property => $value) {
+        $effectLabel[] = $this->properties[$property]['label'] . ': ' . ($this->properties[$property]['values'][$value] ?? $value);
       }
-      $label[] = $this->effectLabels[$effect] . ($effectLabel ? ' (' . implode(' | ', $effectLabel) . ')' : '');
+      $label[] = $this->effects[$effect]['label'] . ($effectLabel ? ' (' . implode(' | ', $effectLabel) . ')' : '');
     }
     return implode(' ', $label);
   }
@@ -275,7 +352,7 @@ class NeoImageStyle {
    * @return $this
    */
   public function scaleCrop($width, $height, $anchor = 'center-center'):self {
-    $anchorKeys = array_flip($this->valueKeys['a']);
+    $anchorKeys = array_flip($this->properties['a']['values']);
     if (!isset($anchorKeys[$anchor])) {
       throw new \InvalidArgumentException('Invalid anchor value.');
     }
@@ -308,7 +385,7 @@ class NeoImageStyle {
    * @return $this
    */
   public function crop($width, $height, $anchor = 'center-center'):self {
-    $anchorKeys = array_flip($this->valueKeys['a']);
+    $anchorKeys = array_flip($this->properties['a']['values']);
     if (!isset($anchorKeys[$anchor])) {
       throw new \InvalidArgumentException('Invalid anchor value.');
     }
@@ -377,7 +454,7 @@ class NeoImageStyle {
     $this->parameters['e']['w'] = (int) $width;
     $this->parameters['e']['h'] = (int) $height;
     if ($anchor) {
-      $anchorKeys = array_flip($this->valueKeys['a']);
+      $anchorKeys = array_flip($this->properties['a']['values']);
       if (!isset($anchorKeys[$anchor])) {
         throw new \InvalidArgumentException('Invalid anchor value.');
       }
@@ -455,13 +532,13 @@ class NeoImageStyle {
   public function getImageStyleEffects():array {
     $effects = [];
     foreach ($this->parameters as $param => $config) {
-      if (isset($this->effectKeys[$param])) {
-        $effect = $this->effectKeys[$param];
+      if (isset($this->effects[$param])) {
+        $effect = $this->effects[$param]['id'];
         $effects[$effect] = [];
         if (is_array($config)) {
           foreach ($config as $key => $value) {
-            $property = $this->propertyKeys[$key];
-            $effects[$effect][$property] = $this->valueKeys[$key][$value] ?? $value;
+            $property = $this->properties[$key]['label'];
+            $effects[$effect][$property] = $this->properties[$key]['values'][$value] ?? $value;
           }
         }
       }
@@ -554,7 +631,7 @@ class NeoImageStyle {
    */
   public function getWidth():int|null {
     $width = NULL;
-    foreach ($this->getParameters() as $style => $config) {
+    foreach ($this->getParameters() as $config) {
       $width = $width && !empty($config['w']) ? min($width, $config['w']) : $config['w'] ?? $width;
     }
     return $width;
@@ -568,7 +645,7 @@ class NeoImageStyle {
    */
   public function getHeight():int|null {
     $height = NULL;
-    foreach ($this->getParameters() as $style => $config) {
+    foreach ($this->getParameters() as $config) {
       $height = $height && !empty($config['h']) ? min($height, $config['h']) : $config['h'] ?? $height;
     }
     return $height;
@@ -601,34 +678,163 @@ class NeoImageStyle {
   }
 
   /**
-   * Convert id to params.
+   * Convert id to params, refusing an id the grammar does not admit.
+   *
+   * The parse half of the **codec**, and the module's only contract with the
+   * outside world: it is handed a name from a URL by the param converter and a
+   * **derivative directory** name from disk by the style manager. It therefore
+   * validates, where the serialise half does not.
+   *
+   * A **rejected id** throws, which is the failure convention this class
+   * already uses for a bad anchor, width or height, and it keeps the declared
+   * array return so nothing downstream changes signature. There is deliberately
+   * no second nullable-returning parse beside it: three callers want three
+   * different reactions to a refusal, and a second entry into one grammar is
+   * how a grammar drifts.
    *
    * @param string $id
    *   The id.
    *
    * @return array
-   *   The parameters.
+   *   The parameters. A width or a height comes back as an integer, because
+   *   validation has already proved it is digits — which is what makes the
+   *   width and height getters' declared `int` returns honest rather than
+   *   dependent on PHP coercing a string.
+   *
+   * @throws \InvalidArgumentException
+   *   When the id is outside the **id grammar**.
    */
   public function convertIdToParams(string $id):array {
+    if (!str_starts_with($id, self::ID_PREFIX)) {
+      throw new \InvalidArgumentException(sprintf('The image style id "%s" does not start with "%s".', $id, self::ID_PREFIX));
+    }
+    $body = substr($id, strlen(self::ID_PREFIX));
+    if ($body === '') {
+      throw new \InvalidArgumentException(sprintf('The image style id "%s" names no effect.', $id));
+    }
     $params = [];
-    $id = substr($id, 4);
-    $effects = explode('~', $id);
-    foreach ($effects as $effect) {
-      $parts = explode('--', $effect);
-      $type = $parts[0];
-      if (isset($parts[1])) {
-        $params[$type] = [];
-        $props = explode('_', $parts[1]);
-        foreach ($props as $prop) {
-          $prop = explode('-', $prop);
-          $params[$type][$prop[0]] = $prop[1];
-        }
+    foreach (explode('~', $body) as $segment) {
+      $parts = explode('--', $segment);
+      if (count($parts) > 2) {
+        throw new \InvalidArgumentException(sprintf('The image style id "%s" separates the properties of "%s" more than once.', $id, $parts[0]));
       }
-      else {
-        $params[$type] = 1;
+      $effect = $parts[0];
+      if (!isset($this->effects[$effect])) {
+        throw new \InvalidArgumentException(sprintf('The image style id "%s" names an unknown effect "%s".', $id, $effect));
       }
+      if (isset($params[$effect])) {
+        throw new \InvalidArgumentException(sprintf('The image style id "%s" repeats the effect "%s".', $id, $effect));
+      }
+      $config = isset($parts[1]) ? $this->parseProperties($id, $effect, $parts[1]) : [];
+      $this->assertRequiredProperties($id, $effect, $config);
+      // An effect that carries no properties stores the sentinel the setter
+      // sets, so serialising the result answers the segment that was parsed.
+      $params[$effect] = $config ?: 1;
     }
     return $params;
+  }
+
+  /**
+   * Parses one effect's property list against what that effect allows.
+   *
+   * @param string $id
+   *   The whole id, for the message.
+   * @param string $effect
+   *   The effect key the properties belong to.
+   * @param string $list
+   *   The property list, without its separator.
+   *
+   * @return array
+   *   The properties, keyed by property key.
+   *
+   * @throws \InvalidArgumentException
+   *   When a property is unknown, unallowed, repeated, or has no value.
+   */
+  protected function parseProperties(string $id, string $effect, string $list):array {
+    $config = [];
+    foreach (explode('_', $list) as $pair) {
+      $parts = explode('-', $pair, 2);
+      if (count($parts) !== 2 || $parts[1] === '') {
+        throw new \InvalidArgumentException(sprintf('The image style id "%s" gives the property "%s" of effect "%s" no value.', $id, $parts[0], $effect));
+      }
+      [$property, $value] = $parts;
+      if (!isset($this->properties[$property])) {
+        throw new \InvalidArgumentException(sprintf('The image style id "%s" names an unknown property "%s".', $id, $property));
+      }
+      if (!in_array($property, $this->effects[$effect]['allowed'], TRUE)) {
+        throw new \InvalidArgumentException(sprintf('The image style id "%s" gives the effect "%s" a property it does not take: "%s".', $id, $effect, $property));
+      }
+      if (isset($config[$property])) {
+        throw new \InvalidArgumentException(sprintf('The image style id "%s" repeats the property "%s" of effect "%s".', $id, $property, $effect));
+      }
+      $config[$property] = $this->parsePropertyValue($id, $effect, $property, $value);
+    }
+    return $config;
+  }
+
+  /**
+   * Validates one property's value and answers it in its own type.
+   *
+   * @param string $id
+   *   The whole id, for the message.
+   * @param string $effect
+   *   The effect key, for the message.
+   * @param string $property
+   *   The property key.
+   * @param string $value
+   *   The raw value.
+   *
+   * @return int|string
+   *   The value, cast to an integer where the property is one.
+   *
+   * @throws \InvalidArgumentException
+   *   When the value is outside the property's vocabulary.
+   */
+  protected function parsePropertyValue(string $id, string $effect, string $property, string $value):int|string {
+    $rules = $this->properties[$property];
+    if (isset($rules['values'])) {
+      if (!isset($rules['values'][$value])) {
+        throw new \InvalidArgumentException(sprintf('The image style id "%s" gives the %s of effect "%s" an unknown value: "%s".', $id, $rules['label'], $effect, $value));
+      }
+      return $value;
+    }
+    if (($rules['type'] ?? 'string') === 'integer') {
+      if (!preg_match(self::INTEGER_VALUE, $value)) {
+        throw new \InvalidArgumentException(sprintf('The image style id "%s" gives the %s of effect "%s" a value that is not a whole number: "%s".', $id, $rules['label'], $effect, $value));
+      }
+      return (int) $value;
+    }
+    if (!preg_match(self::VALUE_ALPHABET, $value)) {
+      throw new \InvalidArgumentException(sprintf('The image style id "%s" gives the %s of effect "%s" a value outside the id alphabet: "%s".', $id, $rules['label'], $effect, $value));
+    }
+    return $value;
+  }
+
+  /**
+   * Asserts one effect carries every property its declaration requires.
+   *
+   * @param string $id
+   *   The whole id, for the message.
+   * @param string $effect
+   *   The effect key.
+   * @param array $config
+   *   The properties parsed for it.
+   *
+   * @throws \InvalidArgumentException
+   *   When a required property is missing.
+   */
+  protected function assertRequiredProperties(string $id, string $effect, array $config):void {
+    $rules = $this->effects[$effect];
+    foreach ($rules['required'] as $property) {
+      if (!isset($config[$property])) {
+        throw new \InvalidArgumentException(sprintf('The image style id "%s" gives the effect "%s" no %s, which it requires.', $id, $effect, $this->properties[$property]['label']));
+      }
+    }
+    $any = $rules['required_any'] ?? [];
+    if ($any && !array_intersect($any, array_keys($config))) {
+      $labels = array_map(fn (string $property): string => $this->properties[$property]['label'], $any);
+      throw new \InvalidArgumentException(sprintf('The image style id "%s" gives the effect "%s" neither a %s.', $id, $effect, implode(' nor a ', $labels)));
+    }
   }
 
   /**

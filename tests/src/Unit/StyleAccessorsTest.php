@@ -17,17 +17,12 @@ use PHPUnit\Framework\Attributes\Group;
  * array a setter filled, and the fourth is static string handling. None of
  * them had a test.
  *
- * As with the **codec**, every expectation states what the code does *today*.
- * One of today's answers is a defect and is pinned as one — a getter that
- * declares `int` and is handed the string a parsed **style id** produces.
- *
- * `label()` is deliberately never asked about `cropSides()`. That effect
- * stores the integer `1` rather than a property array, and `label()` iterates
- * a style's effect configuration unconditionally, so labelling it emits a
- * `foreach() argument must be of type array|object` warning. The warning is
- * real and is the vocabulary work's to remove; asserting it under this site's
- * `failOnWarning` configuration would assert the harness rather than the
- * label.
+ * These were written as characterisation, and two of their expectations were
+ * pinned as defects for the **id grammar** work to change. It has: the parse
+ * now answers integers, so the getter that declares `int` is handed one, and
+ * `label()` no longer iterates the no-property sentinel `cropSides()` sets, so
+ * the effect that legitimately carries no properties can be labelled without a
+ * `foreach() argument must be of type array|object` warning behind it.
  */
 #[Group('neo_image')]
 final class StyleAccessorsTest extends UnitTestCase {
@@ -79,6 +74,11 @@ final class StyleAccessorsTest extends UnitTestCase {
       'a background prints as its raw value',
       ['exact' => [1200, 630, NULL, '#ffffff']],
       'Exact (width: 1200 | height: 630 | background: ffffff)',
+    ];
+    yield 'crop sides' => [
+      'the one effect with no properties labels itself alone',
+      ['cropSides' => []],
+      'Crop Sides',
     ];
     yield 'two effects' => [
       'two effects are joined by a space',
@@ -191,28 +191,26 @@ final class StyleAccessorsTest extends UnitTestCase {
   }
 
   /**
-   * Pins a defect: a width parsed from an id reaches a getter as a string.
+   * It hands a typed getter the integer the parse answered.
    *
-   * Not an acceptance criterion — a characterisation of today's answer, so
-   * that changing it is a deliberate edit to a named assertion.
+   * The **codec**'s parse half is the only route from a **style id** to these
+   * getters — the style manager reads a **derivative directory** name and hands
+   * the parsed parameters straight to a style — and `getWidth()` declares
+   * `int|null` in a class with no `strict_types`. A numeric string was
+   * therefore coerced and a non-numeric one was a `TypeError` reachable from
+   * the image-size select on an admin form.
    *
-   * The **codec**'s parse half answers strings, and the style manager hands
-   * those parsed parameters straight to a style. `getWidth()` declares
-   * `int|null` and its class does not declare `strict_types`, so a numeric
-   * string is silently coerced and a non-numeric one is a `TypeError` — which
-   * is reachable from an admin form, because a malformed **derivative
-   * directory** becomes an option in the image-size select. An integer cast on
-   * parse, and a grammar that refuses the non-numeric case, close both.
+   * The grammar closes both, and this pins the consequence at the getter, where
+   * `StyleIdCodecTest` pins it at the codec: the value arrives already an
+   * integer, and a width that is not digits never becomes parameters at all.
    */
-  public function testPinsWidthParsedFromIdReachingTypedGetter(): void {
-    $style = new NeoImageStyle();
-    $parsed = $style->convertIdToParams('neo-s--w-300');
-    $this->assertSame(['s' => ['w' => '300']], $parsed, 'the parse answers a string');
-    $this->assertSame(300, (new NeoImageStyle())->setParameters($parsed)->getWidth(), 'the declared int return coerces the numeric string');
+  public function testHandsTypedGettersTheIntegersTheParseAnswered(): void {
+    $parsed = (new NeoImageStyle())->convertIdToParams('neo-s--w-300');
+    $this->assertSame(['s' => ['w' => 300]], $parsed, 'the parse answers an integer');
+    $this->assertSame(300, (new NeoImageStyle())->setParameters($parsed)->getWidth(), 'which the declared int return holds with nothing to coerce');
 
-    $nonNumeric = (new NeoImageStyle())->setParameters(['s' => ['w' => 'zz']]);
-    $this->expectException(\TypeError::class);
-    $nonNumeric->getWidth();
+    $this->expectException(\InvalidArgumentException::class);
+    (new NeoImageStyle())->convertIdToParams('neo-s--w-zz');
   }
 
 }
