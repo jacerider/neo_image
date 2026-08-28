@@ -130,6 +130,11 @@ class NeoImageStyle {
    *
    * @throws \InvalidArgumentException
    *   When the media resolves to no file.
+   *
+   * @deprecated in neo_image:1.1.0 and is removed from neo_image:2.0.0. Use
+   *   \Drupal\neo_image\NeoImageStyle::toUrlFromEntity() instead.
+   *
+   * @see \Drupal\neo_image\NeoImageStyle::toUrlFromEntity()
    */
   public function buildUrlForMedia(MediaInterface $media):string {
     $file = NeoImageUtility::resolvedFile($media);
@@ -726,7 +731,10 @@ class NeoImageStyle {
    *   Whether to ensure the image style derivative exists.
    *
    * @return string
-   *   The URL of the image after applying the image style.
+   *   The URL of the image after applying the image style. A URI this module
+   *   calls external — which is every URI that is not on the public stream,
+   *   `private://` included — is answered unchanged. That is why this is not
+   *   the method `toUrlFromEntity()` delegates to; see `docs/adr/0011`.
    */
   public function toUrlFromUri(string $uri, bool $ensure = FALSE):string {
     $uri = str_replace('/sites/default/files/', 'public://', $uri);
@@ -735,12 +743,39 @@ class NeoImageStyle {
     }
     $style = $this->getImageStyle();
     if ($ensure) {
-      $styleUri = $style->buildUri($uri);
-      if (!file_exists($styleUri)) {
-        $style->createDerivative($uri, $styleUri);
-      }
+      $this->ensureDerivative($style, $uri);
     }
     return $style->buildUrl($uri);
+  }
+
+  /**
+   * Writes a style's derivative for a URI unless it is already on disk.
+   *
+   * The **derivative ensure**, and the one thing the two URL **entry points**
+   * share. Both carried a verbatim copy of it; this is that copy, written
+   * once, so the two cannot drift apart the way the four **resolved file**
+   * lookups did.
+   *
+   * It is deliberately the *only* thing they share. They do not collapse into
+   * one method: the URI entry point answers a `private://` URI unchanged and
+   * the entity entry point builds the image-style URL core's private
+   * derivative route depends on, so a delegation would break private files in
+   * the direction that looks like the general case. `docs/adr/0011` records
+   * it and a kernel test pins it.
+   *
+   * The public-path rewrite that sits beside this step in both callers is a
+   * separate open candidate and stays where it is.
+   *
+   * @param \Drupal\image\ImageStyleInterface $style
+   *   The image style to build the derivative with.
+   * @param string $uri
+   *   The URI of the source image.
+   */
+  private function ensureDerivative(ImageStyleInterface $style, string $uri):void {
+    $styleUri = $style->buildUri($uri);
+    if (!file_exists($styleUri)) {
+      $style->createDerivative($uri, $styleUri);
+    }
   }
 
   /**
@@ -750,6 +785,14 @@ class NeoImageStyle {
    * a URL for the associated image style. If the entity is a MediaInterface,
    * it retrieves the thumbnail file entity. If the entity is a FileInterface,
    * it directly generates the URL for the file's URI using the image style.
+   *
+   * This does **not** delegate to `toUrlFromUri()`, and that is load-bearing
+   * rather than history: it builds the image-style URL unconditionally, where
+   * that method answers every non-public stream unchanged. A private file
+   * resolves through the image style here and would come back as a raw
+   * `private://` string there. `docs/adr/0011` records the decision and a
+   * kernel test pins the difference. The two share the **derivative ensure**
+   * and nothing else.
    *
    * @param Drupal\media\MediaInterface|\Drupal\file\FileInterface $entity
    *   The media or file entity for which to generate the URL.
@@ -771,10 +814,7 @@ class NeoImageStyle {
     $uri = str_replace('/sites/default/files/', 'public://', $uri);
     $style = $this->getImageStyle();
     if ($ensure) {
-      $styleUri = $style->buildUri($uri);
-      if (!file_exists($styleUri)) {
-        $style->createDerivative($uri, $styleUri);
-      }
+      $this->ensureDerivative($style, $uri);
     }
     return $style->buildUrl($uri);
   }

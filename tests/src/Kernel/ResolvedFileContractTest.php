@@ -169,8 +169,11 @@ final class ResolvedFileContractTest extends KernelTestBase {
     $this->assertSame('#', $style->toUrlFromEntity($gone));
 
     // The fourth behaviour: the media URL builder throws where a URL entry
-    // point answers '#'. It keeps that throw, and ticket 03 deprecates it.
+    // point answers '#'. It keeps that throw, and ticket 03 deprecates it —
+    // which is why asserting the contract table now calls a deprecated method
+    // deliberately, and says so to the analyser rather than to a log.
     $this->expectException(\InvalidArgumentException::class);
+    // @phpstan-ignore method.deprecated
     $style->buildUrlForMedia($gone);
   }
 
@@ -223,9 +226,14 @@ final class ResolvedFileContractTest extends KernelTestBase {
       $this->assertSame($expectedUrl, $style->toUrlFromEntity($entity), "The entity url builds from the resolved file for {$subject}.");
     }
 
+    // Deprecated as of ticket 03, and asserted all the same: the tag retires
+    // the fourth failure contract by label, and the label changes nothing
+    // about what this entry point resolves.
+    // @phpstan-ignore method.deprecated
+    $mediaUrl = $style->buildUrlForMedia($media);
     $this->assertSame(
       $style->getImageStyle()->buildUrl($this->file->getFileUri()),
-      $style->buildUrlForMedia($media),
+      $mediaUrl,
       'The media url builds from the resolved file.'
     );
   }
