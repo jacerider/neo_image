@@ -11,9 +11,13 @@ use Drupal\Core\Render\RendererInterface;
 use Symfony\Component\DependencyInjection\ContainerInterface;
 use Drupal\Core\Field\FieldDefinitionInterface;
 use Drupal\Core\Field\Plugin\Field\FieldFormatter\EntityReferenceFormatterBase;
+use Drupal\file\FileInterface;
+use Drupal\media\MediaInterface;
 use Drupal\neo\Plugin\Field\FieldFormatter\NeoEntityReferenceLinkTrait;
 use Drupal\neo\Plugin\Field\FieldFormatter\NeoEntityReferenceSelectionTrait;
 use Drupal\neo_image\NeoImage;
+use Drupal\neo_image\NeoImageUtility;
+use Psr\Log\LoggerInterface;
 
 /**
  * Plugin implementation of the 'neo_image_image' formatter.
@@ -29,6 +33,13 @@ class NeoImageBaseFormatter extends EntityReferenceFormatterBase {
    * @var \Drupal\Core\Render\RendererInterface
    */
   protected $renderer;
+
+  /**
+   * The logger channel named for this module.
+   *
+   * @var \Psr\Log\LoggerInterface
+   */
+  protected $logger;
 
   /**
    * Constructs a NeoModalMediaFormatter object.
@@ -49,10 +60,13 @@ class NeoImageBaseFormatter extends EntityReferenceFormatterBase {
    *   Any third party settings.
    * @param \Drupal\Core\Render\RendererInterface $renderer
    *   The renderer service.
+   * @param \Psr\Log\LoggerInterface $logger
+   *   The logger channel named for this module.
    */
-  public function __construct($plugin_id, $plugin_definition, FieldDefinitionInterface $field_definition, array $settings, $label, $view_mode, array $third_party_settings, RendererInterface $renderer) {
+  public function __construct($plugin_id, $plugin_definition, FieldDefinitionInterface $field_definition, array $settings, $label, $view_mode, array $third_party_settings, RendererInterface $renderer, LoggerInterface $logger) {
     parent::__construct($plugin_id, $plugin_definition, $field_definition, $settings, $label, $view_mode, $third_party_settings);
     $this->renderer = $renderer;
+    $this->logger = $logger;
   }
 
   /**
@@ -67,7 +81,8 @@ class NeoImageBaseFormatter extends EntityReferenceFormatterBase {
       $configuration['label'],
       $configuration['view_mode'],
       $configuration['third_party_settings'],
-      $container->get('renderer')
+      $container->get('renderer'),
+      $container->get('logger.channel.neo_image')
     );
   }
 
@@ -149,19 +164,35 @@ class NeoImageBaseFormatter extends EntityReferenceFormatterBase {
     $imageDimensions = $imageSettings['dimensions'] ?? [];
 
     foreach ($entities as $delta => $entity) {
-      try {
-        $image = NeoImage::createFromEntity($entity);
-        $image->autoFromDimensions($imageDimensions);
-        $elements[$delta] = $image->toRenderable();
-        if ($url = $this->getLinkUrl($items->getEntity(), $entity)) {
-          $elements[$delta]['#url'] = $url;
-        }
+      // Ask for the resolved file before building anything. This one check is
+      // also the type narrowing: the entities are typed as plain entities, and
+      // an entity that is neither a media nor a file has no file either — it is
+      // skipped the same way rather than being handed to a factory whose
+      // parameter it does not satisfy.
+      if ((!$entity instanceof MediaInterface && !$entity instanceof FileInterface) || !NeoImageUtility::resolvedFile($entity)) {
+        // Name what was skipped. A warning that only said an image was missing
+        // would be the silence this replaces with extra steps.
+        $this->logger->warning('No image was rendered for @entity_type @entity_id (%label) referenced by @field_name: it resolves to no file.', [
+          '@entity_type' => $entity->getEntityTypeId(),
+          '@entity_id' => $entity->id(),
+          '%label' => $entity->label(),
+          '@field_name' => $items->getName(),
+        ]);
+        continue;
+      }
 
-        // Add cacheability of each item in the field.
-        $this->renderer->addCacheableDependency($elements[$delta], $entity);
+      // No blanket catch: the one predictable failure is guarded above, and
+      // anything still thrown from here is a bug that a swallowed exception
+      // would leave with neither a rendered image nor a trace.
+      $image = NeoImage::createFromEntity($entity);
+      $image->autoFromDimensions($imageDimensions);
+      $elements[$delta] = $image->toRenderable();
+      if ($url = $this->getLinkUrl($items->getEntity(), $entity)) {
+        $elements[$delta]['#url'] = $url;
       }
-      catch (\Exception $e) {
-      }
+
+      // Add cacheability of each item in the field.
+      $this->renderer->addCacheableDependency($elements[$delta], $entity);
     }
 
     return $elements;

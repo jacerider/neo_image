@@ -7,6 +7,9 @@ services:
     class: Drupal\neo_image\Routing\NeoImageStyleConverter
     tags:
       - { name: paramconverter }
+  logger.channel.neo_image:
+    parent: logger.channel_base
+    arguments: ['neo_image']
   neo_image.settings:
     parent: neo_settings.repository
     arguments: ['neo_image']
