@@ -193,8 +193,15 @@ function template_preprocess_neo_image_style(&$variables) {
     }
   }
   else {
-    // Convert the URI to a stream wrapper URI.
-    $variables['uri'] = str_replace('/sites/default/files/', 'public://', $variables['uri']);
+    // Hand the theme variable the stream URI this function already computed.
+    // It used to be recomputed here from the raw variable against a hardcoded
+    // public files path, which matched nothing on a site that had moved its
+    // files directory and left the variable holding a raw web path. Nothing
+    // after this line reads it and neither template references it, so this is
+    // a tidy-up rather than a fix — but the assignment stays, because the
+    // variable is declared by `hook_theme()` and a downstream preprocess may
+    // read it, and it now holds the same URI the render below is built from.
+    $variables['uri'] = $uri;
 
     // Determine the dimensions of the styled image.
     /** @var \Drupal\Core\Image\Image $image */

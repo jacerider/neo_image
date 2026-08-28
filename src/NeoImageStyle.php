@@ -1009,8 +1009,10 @@ class NeoImageStyle {
    * the direction that looks like the general case. `docs/adr/0011` records
    * it and a kernel test pins it.
    *
-   * The public-path rewrite that sits beside this step in both callers is a
-   * separate open candidate and stays where it is.
+   * The **public-path rewrite** sits beside this step in the URI entry point
+   * only, as one call to `rewritePublicPath()`. The entity entry point carried
+   * a copy of it too; it ran on a file entity's URI, which is a stream URI by
+   * definition, so it could never match and it is gone rather than adopted.
    *
    * @param \Drupal\image\ImageStyleInterface $style
    *   The image style to build the derivative with.
@@ -1057,7 +1059,6 @@ class NeoImageStyle {
       return '#';
     }
     $uri = $file->getFileUri();
-    $uri = str_replace('/sites/default/files/', 'public://', $uri);
     $style = $this->getImageStyle();
     if ($ensure) {
       $this->ensureDerivative($style, $uri);
