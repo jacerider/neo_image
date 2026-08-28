@@ -4,10 +4,68 @@ declare(strict_types=1);
 
 namespace Drupal\neo_image;
 
+use Drupal\file\FileInterface;
+use Drupal\media\MediaInterface;
+use Drupal\media\MediaTypeInterface;
+
 /**
  * Image handling methods for neo_image.
  */
 abstract class NeoImageUtility {
+
+  /**
+   * Reads the alt and title an editor authored on an entity's image.
+   *
+   * The single derivation both renders use. Both properties come from the same
+   * field item — the one the media's source plugin declares — so the two halves
+   * of one answer cannot come from two different places, which is the shape of
+   * the defect this repairs. Core's `thumbnail_alt_value` metadata attribute is
+   * deliberately not used: it covers alt and has no title counterpart.
+   *
+   * Three subjects answer nothing, and none of them is an error: a bare file
+   * entity, which has no authored alt; a media whose source field is not an
+   * image field, which carries neither property; and an image media whose alt
+   * was left blank. Nothing is invented in their place — not a filename, not a
+   * media label. This resolves no file and throws nothing.
+   *
+   * @param \Drupal\media\MediaInterface|\Drupal\file\FileInterface $entity
+   *   The media or file entity to read.
+   *
+   * @return array
+   *   An associative array with an 'alt' and a 'title' key, each holding the
+   *   authored value, or NULL where nothing was authored.
+   */
+  public static function authoredAltAndTitle(MediaInterface|FileInterface $entity): array {
+    $authored = [
+      'alt' => NULL,
+      'title' => NULL,
+    ];
+    if (!$entity instanceof MediaInterface) {
+      return $authored;
+    }
+    $type = $entity->bundle->entity;
+    if (!$type instanceof MediaTypeInterface) {
+      return $authored;
+    }
+    $fieldDefinition = $entity->getSource()->getSourceFieldDefinition($type);
+    if (!$fieldDefinition) {
+      return $authored;
+    }
+    $item = $entity->get($fieldDefinition->getName())->first();
+    if (!$item) {
+      return $authored;
+    }
+    // Read the raw value rather than the properties: a source field that is not
+    // an image field has no 'alt' and no 'title' to ask for, and asking anyway
+    // is how a tolerated case becomes a thrown one.
+    $value = $item->getValue();
+    foreach (array_keys($authored) as $property) {
+      if (isset($value[$property]) && $value[$property] !== '') {
+        $authored[$property] = $value[$property];
+      }
+    }
+    return $authored;
+  }
 
   /**
    * Computes a length based on a length specification and an actual length.

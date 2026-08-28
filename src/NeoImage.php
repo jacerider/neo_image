@@ -103,12 +103,19 @@ final class NeoImage implements RenderableInterface {
       if (!$item) {
         throw new \InvalidArgumentException('The media entity does not have a file.');
       }
-      $value = $item->getValue() + [
-        'alt' => '',
-        'title' => '',
-      ];
-      $alt = $alt ?? $value['title'] ?: NULL;
-      $title = $title ?? $value['title'] ?: NULL;
+      // The authored alt and title come from the one derivation both renders
+      // share. An empty supplied value counts as unsupplied: every Twig entry
+      // point defaults its alt argument to the empty string, so a fallback
+      // that only caught NULL would be inert on exactly those paths. Where the
+      // entity authored nothing there is nothing to fall back to, so the
+      // supplied value survives as itself.
+      $authored = NeoImageUtility::authoredAltAndTitle($entity);
+      if ($alt === NULL || $alt === '') {
+        $alt = $authored['alt'] ?? $alt;
+      }
+      if ($title === NULL || $title === '') {
+        $title = $authored['title'] ?? $title;
+      }
       $entity = $entity->get('thumbnail')->entity;
       if (!$entity) {
         throw new \InvalidArgumentException('The media entity does not have a thumbnail.');
@@ -355,11 +362,22 @@ final class NeoImage implements RenderableInterface {
    *   The renderable array.
    */
   public function toRenderable($alt = NULL, $title = NULL, $attributes = []):array {
+    // The same rule as createFromEntity(): an empty supplied value means the
+    // caller supplied nothing and falls back to what this image was built
+    // with. Twig's `neo_image(media)` reaches here with the empty string its
+    // own argument defaults to, so without this the alt derived a moment ago
+    // would be overwritten by that default before it ever reached the image.
+    if ($alt === NULL || $alt === '') {
+      $alt = $this->alt ?? $alt;
+    }
+    if ($title === NULL || $title === '') {
+      $title = $this->title ?? $title;
+    }
     return [
       '#theme' => 'neo_image',
       '#neoImage' => $this,
-      '#alt' => $alt ?? $this->alt,
-      '#title' => $title ?? $this->title,
+      '#alt' => $alt,
+      '#title' => $title,
       '#attributes' => $attributes,
     ];
   }
