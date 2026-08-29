@@ -2,7 +2,7 @@
 
 **Status:** accepted · **Date:** 2026-08-28
 **Context:** `neo_image` — the **render dispatch** behind `neo_image()` and `neo_image_style()`
-**Issue:** jacerider/neo_image#8  ·  **Plan:** `neo-image-twig-surface` on wps
+**Issue:** jacerider/neo_image#8
 
 **Decision.** `neo_image()` and `neo_image_style()` stay exact synonyms: both reach one **render
 dispatch**, which reads the options and nothing else, so neither name narrows what a template can
@@ -13,12 +13,12 @@ end state, not a step towards separating them — kept only as the fleet's regis
 hands over when **breakpoint options** are absent, the other when present — so the equivalence is
 invisible. Once explicit, the tempting edit is to make each name mean its shape — `neo_image()`
 responsive, `neo_image_style()` single-style, as the README, the Alchemist editor's per-prop Twig
-hints and this site's component skill all say. It looks like a bug fix and is wrong:
+hints and the component skill all say. It looks like a bug fix and is wrong:
 `neo_alchemist`'s Media Image Size value plugin answers **breakpoint options** and its documented
 template line feeds them to `neo_image_style()`; the image-size shape feeds effect-keyed options
 through the same line, so one call receives either shape depending on the value plugin attached.
 Narrowing `neo_image_style()` would silently turn every such placement from a `<picture>` into one
-`<img>`, and this site cannot see it, because no component here attaches that plugin.
+`<img>`, and a site none of whose components attach that plugin cannot see it.
 
 **Rejected.**
 - Make each name mean its shape — the change this ADR exists to stop: a markup change across

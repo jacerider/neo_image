@@ -2,7 +2,7 @@
 
 **Status:** accepted · **Date:** 2026-08-28
 **Context:** `neo_image` — the **vendored effect fork** and the **canvas rectangle** inside it
-**Issue:** jacerider/neo_image#7  ·  **Plan:** `neo-image-canvas-rectangle` on wps
+**Issue:** jacerider/neo_image#7
 
 **Decision.** `neo_image` keeps its copy of `image_effects`' canvas machinery and reduces it to what
 the **exact effect** uses: the **canvas rectangle** loses its rotation, translation, resize and grid

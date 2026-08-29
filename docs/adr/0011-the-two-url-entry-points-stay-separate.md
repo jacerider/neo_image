@@ -3,7 +3,7 @@
 **Status:** accepted · **Date:** 2026-08-27
 **Context:** `neo_image` — the URI and entity URL **entry points** that both answer an image-style
 URL, and the **resolved file** step this plan puts underneath them
-**Issue:** jacerider/neo_image#3  ·  **Plan:** `neo-image-file-resolver` on wps
+**Issue:** jacerider/neo_image#3
 
 **Decision.** The entity URL **entry point** does not delegate to the URI URL **entry point**, even
 though after the **resolved file** step lands only four lines separate them. They share the
