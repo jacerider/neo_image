@@ -280,11 +280,15 @@ final class ImageSettings extends SettingsBase {
    * **id grammar** refuses is skipped by `getStyles()`, so iterating styles
    * here would have made the junk this plan stops creating undeletable through
    * the one button a site owner has for it. This is that cleanup path.
+   *
+   * The whole list goes over in one call rather than one name at a time, so
+   * the flush costs one directory listing and one writable-wrapper listing in
+   * total. Looping here cost a wrapper listing per name — twenty-four of them
+   * on this site — and the names and the styles already come from the same
+   * **style scan**.
    */
   public function flushImageStyles(array &$form, FormStateInterface $form_state) {
-    foreach ($this->styleManager->getStyleNames() as $name) {
-      $this->styleManager->flushStyle($name);
-    }
+    $this->styleManager->flushStyles($this->styleManager->getStyleNames());
   }
 
 }

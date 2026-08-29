@@ -144,18 +144,46 @@ final class NeoImageStyleManager {
   /**
    * Delete a style.
    *
+   * The convenient call for one name, and the one roughly thirty sites already
+   * make. It is not deprecated and its signature is untouched: it delegates to
+   * the list form with a single element, which is one honest line and leaves
+   * nothing for any caller to migrate.
+   *
    * @param string $style_name
    *   The style name.
    *
    * @return $this
    */
   public function flushStyle(string $style_name): self {
+    return $this->flushStyles([$style_name]);
+  }
+
+  /**
+   * Delete every named style.
+   *
+   * The **style flush** over a list, which is what the image settings form's
+   * flush button hands it. The writable-wrapper list is built once for the
+   * whole flush rather than once per name: deleting this site's twenty-four
+   * **derivative directories** through the single-name form rebuilt it
+   * twenty-four times.
+   *
+   * These are names, not parsed styles, so a directory holding an id the
+   * **codec** refuses is still removable — see `getStyleNames()`.
+   *
+   * @param string[] $style_names
+   *   The style names.
+   *
+   * @return $this
+   */
+  public function flushStyles(array $style_names): self {
     $wrappers = $this->streamWrapperManager->getWrappers(StreamWrapperInterface::WRITE_VISIBLE);
     foreach ($wrappers as $wrapper => $wrapper_data) {
       if (file_exists($stylesDir = $wrapper . '://styles')) {
-        $style_file = $stylesDir . '/' . $style_name;
-        if (file_exists($style_file)) {
-          $this->fileSystem->deleteRecursive($style_file);
+        foreach ($style_names as $style_name) {
+          $style_file = $stylesDir . '/' . $style_name;
+          if (file_exists($style_file)) {
+            $this->fileSystem->deleteRecursive($style_file);
+          }
         }
       }
     }
