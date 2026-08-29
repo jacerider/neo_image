@@ -15,11 +15,26 @@ use Psr\Log\LoggerInterface;
 final class NeoImageStyleManager {
 
   /**
-   * The styles.
+   * The styles, parsed from the names the **style scan** listed.
    *
    * @var \Drupal\neo_image\NeoImageStyle[]
    */
   protected array $styles;
+
+  /**
+   * The **style scan**: every neo directory name on disk, listed once.
+   *
+   * The manager keeps no stored registry — the **derivative directories** are
+   * the registry — so this listing is it, and both of the manager's answers
+   * come out of it. It is memoised for the request rather than cached, because
+   * it changes whenever any request writes a derivative for a size that did not
+   * exist before; invalidating a persistent copy would mean hooking core's
+   * derivative-writing path, and the failure when it went stale would be a
+   * style missing from an admin select or a flush that skipped a directory.
+   *
+   * @var string[]
+   */
+  protected array $styleNames;
 
   /**
    * Constructs a NeoImageStyleManager object.
@@ -38,6 +53,10 @@ final class NeoImageStyleManager {
    * into a style: before that, a single piece of junk on disk threw out of
    * here and took every caller with it — the image settings form, every field
    * formatter's settings, and `hook_image_style_flush`.
+   *
+   * The styles are parsed from the **style scan**'s names rather than from a
+   * reading of their own, so a caller asking for styles and a caller asking for
+   * names cost one directory read between them however they are ordered.
    *
    * @return \Drupal\neo_image\NeoImageStyle[]
    *   The styles, keyed by their id.
@@ -83,25 +102,43 @@ final class NeoImageStyleManager {
    * removable through the admin flush. Without this the change would have
    * closed the door and locked the existing junk inside.
    *
+   * This is the **style scan** itself, and `getStyles()` is one of its readers:
+   * the listing happens here, once per request, and the parsed styles are
+   * derived from what it answers.
+   *
    * @return string[]
    *   The directory names, deduplicated across stream wrappers.
    */
   public function getStyleNames(): array {
-    $names = [];
-    $wrappers = $this->streamWrapperManager->getWrappers(StreamWrapperInterface::WRITE_VISIBLE);
-    foreach ($wrappers as $wrapper => $wrapper_data) {
-      if (file_exists($stylesDir = $wrapper . '://styles')) {
-        $mask = "/^neo-/";
-        if ($handle = @opendir($stylesDir)) {
-          while (FALSE !== ($filename = readdir($handle))) {
+    if (!isset($this->styleNames)) {
+      $names = [];
+      $mask = "/^neo-/";
+      $wrappers = $this->streamWrapperManager->getWrappers(StreamWrapperInterface::WRITE_VISIBLE);
+      foreach ($wrappers as $wrapper => $wrapper_data) {
+        if (file_exists($stylesDir = $wrapper . '://styles')) {
+          // `scandir()` rather than an `opendir()` handle: the handle was never
+          // closed, so every listing left an open stream resource for the rest
+          // of the request. Reading the directory into an array works over
+          // stream wrappers just as well and removes the resource entirely,
+          // rather than adding a `closedir()` obligation the next early return
+          // added to this loop can skip.
+          //
+          // SCANDIR_SORT_NONE because this is a mechanical swap and the order
+          // is observable: it is the order of the size select on the image
+          // settings form. Sorting is what `scandir()` adds over `readdir()`
+          // and it is the one thing here that would change an answer, so it is
+          // turned off — the entries come back in the order the directory
+          // yields them, exactly as before.
+          foreach (@scandir($stylesDir, SCANDIR_SORT_NONE) ?: [] as $filename) {
             if (preg_match($mask, $filename)) {
               $names[$filename] = $filename;
             }
           }
         }
       }
+      $this->styleNames = array_values($names);
     }
-    return array_values($names);
+    return $this->styleNames;
   }
 
   /**
