@@ -23,6 +23,44 @@ class NeoImageStyle {
   protected array $parameters = [];
 
   /**
+   * The **built style** this object last constructed, if any.
+   *
+   * A single slot rather than a map, because a caller mutates one of these
+   * objects in sequence and none alternates between two parameter sets, so a
+   * map would grow without bound to serve nobody.
+   *
+   * @var \Drupal\image\ImageStyleInterface|null
+   */
+  protected ?ImageStyleInterface $builtStyle = NULL;
+
+  /**
+   * The **style id** the memoised **built style** was built for.
+   *
+   * The memo is keyed on the id rather than guarded by a flag, and the id is
+   * derived from the parameters, so every mutation path invalidates it for
+   * free: the eight setters and `setParameters()` all change what
+   * `getImageStyleName()` answers, and a changed name misses the memo. A flag
+   * would have to be cleared from nine places today and from one more for every
+   * setter added later, and the failure when someone forgets is not a stale
+   * object — it is a style rendered under a name that describes different
+   * parameters, into the **derivative directory** that name owns.
+   *
+   * @var string|null
+   */
+  protected ?string $builtStyleId = NULL;
+
+  /**
+   * The core convert effect a **built style** appends, per process.
+   *
+   * Which one it is comes from `\Drupal::VERSION`, a compile-time constant, so
+   * it cannot change while PHP is running: resolved on first use and reused, it
+   * is exactly as correct as recomputing it per style and cannot drift.
+   *
+   * @var string|null
+   */
+  protected static ?string $conversionEffectId = NULL;
+
+  /**
    * The **id grammar**, one declaration per effect.
    *
    * This is the vocabulary *and* the rules, deliberately in one array rather
@@ -550,31 +588,78 @@ class NeoImageStyle {
   /**
    * Get image style.
    *
+   * The **built style** is constructed once per set of parameters and then
+   * handed back to every later caller. Before this, every ask created an
+   * unsaved `ImageStyle`, attached one effect per parameter, ran a preprocess
+   * callback for the effects that have one and appended the **format
+   * conversion** effect — all of it again for the next ask with the same
+   * parameters.
+   *
+   * The flush path is where that mattered. Core flushes one image's derivatives
+   * by loading every configured image style and calling `flush($path)` on each;
+   * this module's `hook_image_style_flush` answers every one of those by
+   * iterating every neo style and asking it for a built style; and the style
+   * manager is a shared service, so the same objects are asked over and over.
+   * Eight configured styles and twenty-four neo directories was 192
+   * constructions for one file, and is now 24.
+   *
+   * **The memoised style is shared, not cloned.** Every caller here and
+   * everywhere else uses it read-only — `buildUri()`, `buildUrl()`,
+   * `transformDimensions()`, `getName()` and the derivative write — so one
+   * instance is safe, and cloning per call would hand most of the saving back
+   * while raising a question about how deeply a config entity's effect
+   * collection copies. The trade is deliberate and it is this method's one new
+   * hazard: a caller that mutates what it is given now affects the next caller
+   * in the same request.
+   *
    * @return \Drupal\image\ImageStyleInterface
    *   The image style.
    */
   public function getImageStyle():ImageStyleInterface {
+    $id = $this->getImageStyleName();
+    if ($this->builtStyle !== NULL && $this->builtStyleId === $id) {
+      return $this->builtStyle;
+    }
     $image_style = ImageStyle::create([
-      'name' => $this->getImageStyleName(),
+      'name' => $id,
     ]);
-    foreach ($this->getImageStyleEffects() as $id => $data) {
-      $callback = Str::camel('preprocess_' . $id);
+    foreach ($this->getImageStyleEffects() as $effect_id => $data) {
+      $callback = Str::camel('preprocess_' . $effect_id);
       if (method_exists($this, $callback)) {
         $data = $this->$callback($data);
       }
       $image_style->addImageEffect([
-        'id' => $id,
+        'id' => $effect_id,
         'data' => $data,
       ]);
     }
-    $effectId = version_compare(\Drupal::VERSION, '11.2.0', '>=') ? 'image_convert_avif' : 'image_convert';
     $image_style->addImageEffect([
-      'id' => $effectId,
+      'id' => $this->getConversionEffectId(),
       'data' => [
         'extension' => 'webp',
       ],
     ]);
+    $this->builtStyleId = $id;
+    $this->builtStyle = $image_style;
     return $image_style;
+  }
+
+  /**
+   * Get the core convert effect a **built style** appends.
+   *
+   * Resolved on first use and reused for the rest of the process, because it is
+   * derived from `\Drupal::VERSION` and a constant compiled into the running
+   * PHP cannot change under it. The comparison is kept rather than deleted: it
+   * is provably always true on any site that can install this module — `neo`
+   * declares `^11.3` — but deleting it belongs with narrowing this package's
+   * own declared core range, which is a release-visible claim about what thirty
+   * sites may run and not part of a memoisation change.
+   *
+   * @return string
+   *   The image effect plugin id.
+   */
+  protected function getConversionEffectId():string {
+    return static::$conversionEffectId ??= version_compare(\Drupal::VERSION, '11.2.0', '>=') ? 'image_convert_avif' : 'image_convert';
   }
 
   /**
