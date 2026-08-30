@@ -197,15 +197,24 @@ final class NeoImageStyleManager {
   /**
    * Delete a style.
    *
-   * The convenient call for one name, and the one roughly thirty sites already
-   * make. It is not deprecated and its signature is untouched: it delegates to
-   * the list form with a single element, which is one honest line and leaves
-   * nothing for any caller to migrate.
+   * The convenient call for one name, and the one most callers already make.
+   * It is not deprecated and its signature is untouched: it delegates to the
+   * list form with a single element, which is one honest line.
+   *
+   * It is narrowed, though, because a delegated guard is still a guard. The
+   * name has to be a **flushable name** — the `neo-` prefix and a single path
+   * segment, no `/` and no `\` — or this throws and deletes nothing. A caller
+   * passing a configured image style's name, `large` among them, is refused
+   * where it used to delete a directory; that directory is core's
+   * `ImageStyle::flush()` to remove, not this module's.
    *
    * @param string $style_name
    *   The style name.
    *
    * @return $this
+   *
+   * @throws \InvalidArgumentException
+   *   When the name is not a **flushable name**.
    */
   public function flushStyle(string $style_name): self {
     return $this->flushStyles([$style_name]);
@@ -216,19 +225,52 @@ final class NeoImageStyleManager {
    *
    * The **style flush** over a list, which is what the image settings form's
    * flush button hands it. The writable-wrapper list is built once for the
-   * whole flush rather than once per name: deleting this site's twenty-four
-   * **derivative directories** through the single-name form rebuilt it
-   * twenty-four times.
+   * whole flush rather than once per name: flushing a site's **derivative
+   * directories** through the single-name form rebuilt that list once per
+   * directory.
    *
-   * These are names, not parsed styles, so a directory holding an id the
-   * **codec** refuses is still removable — see `getStyleNames()`.
+   * Every name has to be a **flushable name**: the `neo-` prefix, and a single
+   * path segment — no `/`, no `\`. The prefix leaves no room for a scheme and
+   * the one segment leaves no room for traversal, which is what makes joining
+   * a caller's name onto `{scheme}://styles/` and handing the result to a
+   * recursive delete safe. It is exactly what the **style scan** lists, so
+   * every name this module produces passes. A name outside that shape throws
+   * `\InvalidArgumentException` naming it, and the whole list is required
+   * before the writable wrappers are asked for and before the first deletion,
+   * so a flush either deletes everything it was asked for or deletes nothing —
+   * half a flush is the worse answer, because the caller cannot tell which
+   * half happened.
+   *
+   * That shape is **not** the **id grammar**, and the two must not be
+   * conflated. Running the **codec** here would refuse a **rejected id** and
+   * lock its directory on disk, which is the set this flush exists to clear;
+   * these are names, not parsed styles, so a directory holding an id the codec
+   * refuses is still removable — see `getStyleNames()` and ADR 0015. The guard
+   * refuses a path escape and a missing prefix and nothing else, which is why
+   * both `neo-junk` and `neo-cs~e--w-36_h-36` are flushable names.
    *
    * @param string[] $style_names
    *   The style names.
    *
    * @return $this
+   *
+   * @throws \InvalidArgumentException
+   *   When any name is not a **flushable name**.
    */
   public function flushStyles(array $style_names): self {
+    foreach ($style_names as $style_name) {
+      // Written out here rather than as a call into the **codec**, so that a
+      // later reader cannot mistake the two: a **rejected id** is a flushable
+      // name and its directory has to stay removable.
+      $escapes = str_contains($style_name, '/') || str_contains($style_name, '\\');
+      if ($escapes || !str_starts_with($style_name, 'neo-')) {
+        throw new \InvalidArgumentException(sprintf(
+          'The style name "%s" cannot be flushed: it has to carry the "neo-" '
+          . 'prefix and be a single path segment, with no "/" and no "\\".',
+          $style_name
+        ));
+      }
+    }
     $wrappers = $this->streamWrapperManager->getWrappers(StreamWrapperInterface::WRITE_VISIBLE);
     foreach ($wrappers as $wrapper => $wrapper_data) {
       if (file_exists($stylesDir = $wrapper . '://styles')) {

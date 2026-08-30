@@ -40,6 +40,11 @@ use Psr\Log\LoggerInterface;
  * `FlushTestStream`, because the flush guards every deletion with a
  * `file_exists()` on a `scheme://` uri and a wrapper that resolves nowhere
  * would let a broken flush pass by deleting nothing.
+ *
+ * It also specifies the **flushable name**: the shape the flush requires of
+ * every name a caller hands it before it resolves one into a path, what it
+ * refuses — a path escape and a missing prefix, and nothing else — and that
+ * the refusal takes the whole list before anything at all is deleted.
  */
 #[Group('neo_image')]
 final class StyleFlushListTest extends UnitTestCase {
@@ -147,11 +152,15 @@ final class StyleFlushListTest extends UnitTestCase {
    * Acceptance criterion: *it still deletes a single named directory through
    * the one-name form.*
    *
-   * `flushStyle()` is not deprecated and not narrowed — it is the convenient
-   * call for one name and roughly thirty sites call it — so what is specified
-   * here is that it answers exactly what the list form answers for a
+   * `flushStyle()` is not deprecated and its signature is untouched — it is
+   * the convenient call for one name and most callers make it — so what is
+   * specified here is that it answers exactly what the list form answers for a
    * one-element list. That is the delegation, stated as behaviour rather than
    * as an implementation detail no caller can see.
+   *
+   * It *is* narrowed, though, and that is specified separately below: the
+   * delegation carries the **flushable name** guard with it, so a name the
+   * list form refuses this form refuses too.
    */
   public function testItStillDeletesOneNamedDirectoryThroughTheSingleNameForm(): void {
     $manager = $this->styleManager($this->wrapperManager($this->exactly(2)));
@@ -222,6 +231,162 @@ final class StyleFlushListTest extends UnitTestCase {
       'neoflushtwo://styles/neo-junk',
       'neoflushtwo://styles/neo-s--w-600',
     ], $deleted);
+  }
+
+  /**
+   * It refuses a name that escapes the styles directory, and deletes nothing.
+   *
+   * Acceptance criterion: *it refuses a name that escapes the styles
+   * directory, and deletes nothing.*
+   *
+   * The name carries the `neo-` prefix and a traversal, so it satisfies the
+   * mask the **style scan** applies and still resolves to a real directory
+   * beside `styles/`. A guard reading the prefix alone lets it through and
+   * fails here, which is why a **flushable name** is a single path segment as
+   * well as a prefix.
+   */
+  public function testItRefusesNamesThatEscapeTheStylesDirectory(): void {
+    $manager = $this->styleManager($this->wrapperManager($this->never()));
+
+    try {
+      $manager->flushStyles(['neo-s--w-300/../../css']);
+      $this->fail('Expected the flush to refuse "neo-s--w-300/../../css".');
+    }
+    catch (\InvalidArgumentException) {
+      // Refused, as a name outside the **flushable name** shape must be.
+    }
+
+    $this->assertSame([], $this->deleted, 'Nothing was deleted.');
+  }
+
+  /**
+   * It refuses a name without the `neo-` prefix, and deletes nothing.
+   *
+   * Acceptance criterion: *it refuses a name that does not carry the `neo-`
+   * prefix, and deletes nothing.*
+   *
+   * `large` is a directory the fixture holds and the **style scan** never
+   * lists — a configured image style's, which core's own flush owns. The
+   * prefix is what says a directory is this module's to delete, so a name
+   * without it is a fault in the caller rather than a directory to remove.
+   */
+  public function testItRefusesNamesWithoutTheNeoPrefix(): void {
+    $manager = $this->styleManager($this->wrapperManager($this->never()));
+
+    try {
+      $manager->flushStyles(['large']);
+      $this->fail('Expected the flush to refuse "large".');
+    }
+    catch (\InvalidArgumentException) {
+      // Refused, as a name outside the **flushable name** shape must be.
+    }
+
+    $this->assertSame([], $this->deleted, 'Nothing was deleted.');
+  }
+
+  /**
+   * It refuses the whole list before asking for the writable wrappers.
+   *
+   * Acceptance criterion: *it refuses the whole list before asking the stream
+   * wrapper manager for its wrappers.*
+   *
+   * The first name is legitimate and its directory exists in both wrappers, so
+   * a guard applied per name as the loop reaches it deletes two directories and
+   * then throws — leaving a caller holding an exception and no way to say which
+   * half happened. The mock fails on any `getWrappers()` call, which pins the
+   * check ahead of the wrapper list rather than merely ahead of the deletion.
+   */
+  public function testItRefusesTheWholeListBeforeAskingForTheWritableWrappers(): void {
+    $manager = $this->styleManager($this->wrapperManager($this->never()));
+
+    try {
+      $manager->flushStyles(['neo-s--w-300', 'neo-junk/../../css']);
+      $this->fail('Expected the flush to refuse the list.');
+    }
+    catch (\InvalidArgumentException) {
+      // Refused whole, so the legitimate first name is not deleted either.
+    }
+
+    $this->assertSame([], $this->deleted, 'Nothing was deleted.');
+  }
+
+  /**
+   * It refuses the same names through the single-name form.
+   *
+   * Acceptance criterion: *it refuses the same names through the single-name
+   * form, since `flushStyle()` is what most callers hold.*
+   *
+   * The guard lives in `flushStyles()` alone and `flushStyle()` inherits it by
+   * delegating, which is the point: one condition, no second copy to drift.
+   * Both refusals are asserted here because the one-name form is the call
+   * every site outside this module makes.
+   */
+  public function testItRefusesTheSameNamesThroughTheSingleNameForm(): void {
+    $manager = $this->styleManager($this->wrapperManager($this->never()));
+
+    foreach (['neo-s--w-300/../../css', 'large'] as $refused) {
+      try {
+        $manager->flushStyle($refused);
+        $this->fail(sprintf('Expected the flush to refuse "%s".', $refused));
+      }
+      catch (\InvalidArgumentException) {
+        // Refused through the one-name form as through the list form.
+      }
+    }
+
+    $this->assertSame([], $this->deleted, 'Nothing was deleted.');
+  }
+
+  /**
+   * It refuses with an exception naming the offending name.
+   *
+   * Acceptance criterion: *the refusal is an `\InvalidArgumentException` whose
+   * message names the offending name.*
+   *
+   * The type is the **codec**'s, so a caller has one kind of refusal to catch
+   * from this module's names rather than two. The reader of the message is a
+   * developer whose call site is wrong, and the list may be long, so the
+   * message has to say which name in it was the problem — the offending one,
+   * not the legitimate name standing in front of it.
+   */
+  public function testTheRefusalNamesTheOffendingName(): void {
+    $manager = $this->styleManager($this->wrapperManager($this->never()));
+
+    try {
+      $manager->flushStyles(['neo-s--w-300', 'neo-s--w-600/../../js']);
+      $this->fail('Expected the flush to refuse "neo-s--w-600/../../js".');
+    }
+    catch (\InvalidArgumentException $e) {
+      $this->assertStringContainsString('neo-s--w-600/../../js', $e->getMessage());
+    }
+  }
+
+  /**
+   * It accepts a scan-shaped name carrying `~` and `_`, and deletes it.
+   *
+   * Acceptance criterion: *a scan-shaped name carrying `~` and `_` — the shape
+   * most real **derivative directories** have — is accepted and its directory
+   * deleted.*
+   *
+   * The four fixture names above are all plain single segments, and a real
+   * derivative directory usually is not: the **crop** and **aspect** parameters
+   * put `~` and `_` in the majority of the names a populated site holds. A
+   * guard tightened to one plain segment reads like "prefix and no traversal",
+   * satisfies every other criterion here, and then refuses the image settings
+   * form's own flush button for nearly every directory on disk. What a
+   * **flushable name** refuses is a path escape and a missing prefix, and
+   * nothing else — which is what this pins. The directory is created here
+   * rather than in `setUp()` so that no existing assertion moves.
+   */
+  public function testItAcceptsScanShapedNamesCarryingTildeAndUnderscore(): void {
+    $name = 'neo-cs~e--w-36_h-36';
+    mkdir($this->temporaryDirectory . '/' . self::SCHEME_ONE . '/styles/' . $name, 0777, TRUE);
+
+    $manager = $this->styleManager($this->wrapperManager($this->once()));
+
+    $manager->flushStyles([$name]);
+
+    $this->assertSame(['neoflushone://styles/' . $name], $this->deleted);
   }
 
   /**
