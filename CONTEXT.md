@@ -70,8 +70,10 @@ injection".
 
 **Module channel** — the log channel this module writes every diagnostic to, named for the module and
 reached either as an injected service or by name from the logger factory, which answer the same
-channel. It is where a site builder looks for this module's problems, so nothing here writes to
-core's `image` channel. _Avoid:_ "the logger", "the image channel", "the log".
+channel. It is where a site builder looks for this module's problems, so every diagnostic this
+module logs itself is written here rather than to core's `image` channel. That is a claim about this
+module's own messages: a toolkit operation still logs where core's toolkit contract injects it.
+_Avoid:_ "the logger", "the image channel", "the log".
 
 **Skipped reference** — a reference the **formatter base** builds no image for: one whose target is
 neither a media nor a file, or one with no **resolved file**. The rest of the field still renders,
