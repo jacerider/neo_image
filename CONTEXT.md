@@ -56,6 +56,35 @@ throws, a render answers an empty render array, a URL answers `'#'`. Stated in e
 docblock, so a caller chooses between catching and branching without reading an implementation.
 _Avoid:_ "error handling", "the null case", "the missing-file behaviour".
 
+**Formatter base** — the non-final field-formatter class this module's two image formatters extend,
+and the one class here a site is expected to subclass: a subclass supplies its own `create()`, so the
+constructor's argument list is a published contract rather than an internal detail. _Avoid:_ "the
+abstract formatter" (it is not abstract), "the image formatter" (that is one of its two subclasses).
+
+**Optional argument** — the shape a service argument takes when it is added to an already-released
+constructor: last in the list, defaulted to NULL, resolved from the container by name when it is
+absent, and announced with a deprecation naming the major it becomes required in. It is how a
+**formatter base**'s constructor grows without fatalling a subclass whose factory was written
+against the old list. See ADR 0016. _Avoid:_ "nullable dependency", "the BC shim", "optional
+injection".
+
+**Module channel** — the log channel this module writes every diagnostic to, named for the module and
+reached either as an injected service or by name from the logger factory, which answer the same
+channel. It is where a site builder looks for this module's problems, so nothing here writes to
+core's `image` channel. _Avoid:_ "the logger", "the image channel", "the log".
+
+**Skipped reference** — a reference the **formatter base** builds no image for: one whose target is
+neither a media nor a file, or one with no **resolved file**. The rest of the field still renders,
+and every reference skipped in one field render is named together in a single warning on the
+**module channel** — with its entity type, its id and its label where it has one — rather than one
+warning per delta. _Avoid:_ "missing image", "the empty reference", "the skip".
+
+**Subject cacheability** — the cache metadata an **entity-sourced image** render declares: the
+subject entity's own, merged with its **resolved file**'s. Derived once and applied by both renders,
+so an authored alt changing on the subject and a file changing behind it both invalidate what was
+cached. A render built from a URI string declares none, because a string names no entity. _Avoid:_
+"cache tags", "cacheability metadata", "the invalidation".
+
 **Derivative ensure** — the optional step a URL **entry point** takes before handing out a
 derivative's URL: build the derivative URI and write the derivative if it is not already on disk, so
 the first request does not have to generate it. _Avoid:_ "eager derivative", "pre-generate", "the
@@ -71,16 +100,27 @@ serialise half is total and never refuses; the parse half faces untrusted input 
 outside the **id grammar**. _Avoid:_ "the parser", "the serialiser" for the pair, "the converter"
 (that is the param converter).
 
-**Id grammar** — the closed vocabulary a **style id** must match: the `neo-` prefix, effects joined
-by `~`, properties joined by `_`, and per effect the properties it allows and requires. It is read
-off the setter methods rather than invented, so it accepts every id the module can produce and
-nothing else. Declared once, with the effect keys and labels. _Avoid:_ "the format", "the id spec",
-"validation rules".
+**Id grammar** — the closed vocabulary a **style id** must match: the `neo-` prefix, which alone
+names the **identity style**, effects joined by `~`, properties joined by `_`, and per effect the
+properties it allows and requires. It is read off the setter methods rather than invented, so it
+accepts every id the module can produce and nothing else. Declared once, with the effect keys and
+labels. _Avoid:_ "the format", "the id spec", "validation rules".
+
+**Identity style** — a style carrying no effects. Its **style id** is the bare prefix and its
+**built style** is the **format conversion** alone, so a URL for it answers the source converted at
+its own dimensions, while a **single-style render** of it emits the source file untouched. _Avoid:_
+"empty style", "the default style", "no-op style".
 
 **Round-trip safety** — the guarantee that parsing a **style id** and serialising it again answers
 the same id, and that serialising a setter's parameters and parsing them back answers the same
 parameters. It is what makes a **derivative directory**'s name the id that was requested. _Avoid:_
 "idempotent", "stable id", "canonical id".
+
+**Settable value** — a property value a setter accepts: one the **id grammar** can carry, checked
+against the same declaration the parse reads. It is what holds **round-trip safety** up from the
+producer's end — no setter can build a **rejected id** — and it is checked after the setter's own
+cast, because the stored value is the one the id will carry. _Avoid:_ "valid input", "the setter
+validation", "sanitised value".
 
 **Rejected id** — a string outside the **id grammar**. The **codec** throws on it, the param
 converter answers nothing so the route 404s, and the style manager skips the directory and logs it.
@@ -101,9 +141,31 @@ effect per parameter, plus the **format conversion** last. Remembered per style 
 **style id**, so it is built once per parameter set and shared read-only with every caller. _Avoid:_
 "the image style" unqualified (that is a configured one), "the generated style".
 
+**Directory style** — the unsaved `ImageStyle` that stands for a **derivative directory** rather than
+for a set of parameters: the directory's name, plus the **format conversion** and no other effect. It
+is the **identity style**'s **built style** wearing that name, it is never rendered, and its only job
+is core's derivative-uri arithmetic — which reads a style's id and the extension its effects produce
+and nothing else. Because it is built from a name instead of parsed from one, it exists for a
+**rejected id** too, which is what lets a flush reach a directory the **codec** refuses. _Avoid:_
+"flush style", "bare style", "empty style" (that is the **identity style**).
+
+**Flushable name** — the shape a **style flush** requires of every name a caller hands it: the
+`neo-` prefix and a single path segment, which is exactly what the **style scan** lists. It is not
+the **id grammar** — a **rejected id** is a flushable name, which is what keeps its directory
+removable — and a name outside it is refused rather than resolved into a path. _Avoid:_ "valid style
+name", "sanitised name", "style id" (that is what the grammar governs).
+
 **Style flush** — the removal of one or more **derivative directories** from every writable stream
 wrapper, by name. It works on a name rather than a style, so a directory holding a **rejected id** is
-still removable. _Avoid:_ "clearing the styles", "image flush" (that is core's, per configured style).
+still removable, and it deletes only what a **flushable name** addresses. It is the whole-directory
+half; the **per-file flush** is the other. _Avoid:_ "clearing the styles", "image flush" (that is
+core's, per configured style).
+
+**Per-file flush** — the removal of one source image's derivatives from every **derivative
+directory**, answering core's image-style flush when a file is moved or deleted. Like the **style
+flush** it works from the names the **style scan** listed — through a **directory style** each — so it
+reaches a directory holding a **rejected id**, and it removes any directory its deletion empties.
+_Avoid:_ "the flush hook", "derivative flush", "image flush" (that is core's).
 
 **Format conversion** — the core convert effect the module appends to every generated style, last and
 unconditionally: AVIF on the core versions that provide that effect, WebP otherwise — a question
@@ -111,6 +173,12 @@ answered once from the running core version rather than per **built style**. It 
 never in its source's format, and why a style carrying no effects at all still produces a file rather
 than a copy. It needs no contributed module. _Avoid:_ "webp conversion" (the output is often AVIF),
 "the webp effect", "webp support".
+
+**Contributed effect** — an effect the **id grammar** admits whose plugin only a contributed module
+provides: the focal-point pair, `f` and `fw`. A **built style** naming one is constructed without
+that module, because core stores an effect's configuration in a lazy collection and instantiates the
+plugin only when something reads the collection back; rendering such a style is what needs it
+installed. _Avoid:_ "optional effect", "the focal dependency", "third-party effect".
 
 **WebP sidecar** — the `.webp` file the `webp` contributed module writes beside a derivative on a site
 that installs it. neo_image neither creates, serves nor depends on one; its only dealing with a
