@@ -65,8 +65,14 @@ final class NeoImageStyleManager {
    * One style per **derivative directory** on disk whose name the **codec**
    * admits. A directory it refuses is skipped and logged rather than promoted
    * into a style: before that, a single piece of junk on disk threw out of
-   * here and took every caller with it — the image settings form, every field
-   * formatter's settings, and `hook_image_style_flush`.
+   * here and took every caller with it.
+   *
+   * The callers left are the two where somebody is looking at a form — the
+   * image settings form and a field formatter's settings — which is also who
+   * the warning below is written for. The **per-file flush** is no longer among
+   * them: it iterates `getDirectoryStyles()`, whose members are built from the
+   * **style scan**'s names rather than parsed from them, so it reaches the
+   * directories this reader skips. See ADR 0015.
    *
    * The styles are parsed from the **style scan**'s names rather than from a
    * reading of their own, so a caller asking for styles and a caller asking for

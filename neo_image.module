@@ -262,6 +262,24 @@ function template_preprocess_neo_image_style(&$variables) {
 
 /**
  * Implements hook_image_style_flush().
+ *
+ * The **per-file flush**. Core loads every *configured* image style and calls
+ * `flush($path)` on each when a file is moved or deleted, and every one of
+ * those arrives here — so this runs once per configured style for one file.
+ *
+ * It iterates the manager's **directory styles**, one per **derivative
+ * directory** on disk, rather than the styles the **codec** parsed. That is the
+ * whole of this hook's reach: `getStyles()` skips a directory whose name the
+ * grammar refuses, so a file's derivative used to survive there — in the one
+ * kind of directory nothing else visits — until somebody pressed the image
+ * settings form's flush button. A directory style is built from a name instead
+ * of parsed from one, so it exists either way, and it answers the same
+ * derivative uri through core's `buildUri()` that the parsed style's **built
+ * style** answered for every name the codec admits. See ADR 0015.
+ *
+ * Nothing on this path parses anything any more, which is why a file move no
+ * longer writes the "skipped the image style directory" warning: that report
+ * belongs where a person is looking at a form.
  */
 function neo_image_image_style_flush($style, $path = NULL) {
   if ($path && substr($path, 0, 12) !== 'temporary://') {
@@ -272,8 +290,8 @@ function neo_image_image_style_flush($style, $path = NULL) {
     $styleDirs = array_map(function ($wrapper) {
       return $wrapper . '://styles';
     }, array_keys($wrappers));
-    foreach ($style_manager->getStyles() as $neoImageStyle) {
-      $derivativeUri = $neoImageStyle->getImageStyle()->buildUri($path);
+    foreach ($style_manager->getDirectoryStyles() as $directoryStyle) {
+      $derivativeUri = $directoryStyle->buildUri($path);
       if (file_exists($derivativeUri)) {
         $fileSystem->delete($derivativeUri);
         // Remove WebP source if available.

@@ -606,11 +606,19 @@ class NeoImageStyle {
    *
    * The flush path is where that mattered. Core flushes one image's derivatives
    * by loading every configured image style and calling `flush($path)` on each;
-   * this module's `hook_image_style_flush` answers every one of those by
+   * this module's `hook_image_style_flush` answered every one of those by
    * iterating every neo style and asking it for a built style; and the style
-   * manager is a shared service, so the same objects are asked over and over.
+   * manager is a shared service, so the same objects were asked over and over.
    * Eight configured styles and twenty-four neo directories was 192
-   * constructions for one file, and is now 24.
+   * constructions for one file, and became 24.
+   *
+   * That path no longer reaches this method at all. The **per-file flush**
+   * iterates the manager's **directory styles**, which are built from
+   * **derivative directory** names rather than parsed from them, so it reaches
+   * a directory whose name the **codec** refuses — and the manager memoises
+   * that list for the request for exactly the reason above. What the memo here
+   * still saves is the callers that ask a parsed style for its built style: the
+   * render path, once per image per size, and the image settings form.
    *
    * **The memoised style is shared, not cloned.** Every caller here and
    * everywhere else uses it read-only — `buildUri()`, `buildUrl()`,

@@ -34,10 +34,14 @@ use PHPUnit\Framework\Attributes\Group;
  * is skipped instead of being promoted into a style, an admin-form option and a
  * flush target — and named once on the module's own channel.
  *
- * **Skipping does not orphan what it skips.** The admin flush iterates the
- * directory *names* on disk rather than the styles the manager parsed, so junk
- * a site already carries is still removable. That is the cleanup path; the
- * converter's refusal is what stops more appearing.
+ * **Skipping does not orphan what it skips, and this is the admin flush's
+ * half.** The **style flush** the image settings form's button drives iterates
+ * the directory *names* on disk rather than the styles the manager parsed, so
+ * junk a site already carries is still removable wholesale. That is the cleanup
+ * path; the converter's refusal is what stops more appearing. The **per-file
+ * flush** reaches the same directories one derivative at a time, through the
+ * **directory styles** rather than through the names, and
+ * `PerFileFlushReachesEveryDirectoryTest` is where that is pinned.
  *
  * **The settings form stops calling the codec.** It re-parsed the id its own
  * select had just handed it, which was both a third call site and a place a
