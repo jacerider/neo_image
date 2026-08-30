@@ -38,6 +38,21 @@ use PHPUnit\Framework\Attributes\Group;
  * uses it read-only, so one instance is safe, and cloning per call would return
  * most of the saving.
  *
+ * **Which effects are free to a fixture and which are not.** Two ids the **id
+ * grammar** admits — `f` and `fw`, the focal pair — name effects whose plugins
+ * only a contributed module provides. Core does not defer creating them:
+ * `addImageEffect()` hands the configuration to the style's plugin collection,
+ * which instantiates the plugin there and then, so a fixture calling `focal()`
+ * or `focalWidth()` raises `PluginNotFoundException` the first time it builds a
+ * style unless `focal_point` — and `crop`, which it requires — is installed. A
+ * style therefore cannot even be *built* under a name for an effect whose
+ * plugin is absent, let alone rendered. That is why both modules are in the
+ * list below and why this package declares them under `require-dev`: a dev
+ * checkout is then guaranteed to have every module this class installs. Every
+ * other effect built here — scale, resize, crop, crop-sides, the module's own
+ * `exact` and the **format conversion** — is core's or this module's, and costs
+ * a fixture nothing.
+ *
  * **Why kernel and not unit.** A built style is an unsaved config entity: it
  * needs the entity type manager and the image effect plugin manager. Nothing
  * here is pure, so nothing here is a unit test.
@@ -174,6 +189,41 @@ final class BuiltStyleBuiltOnceTest extends KernelTestBase {
     $wholesale = $style->setParameters(['s' => ['w' => 999]])->getImageStyle();
     $this->assertNotSame($previous, $wholesale, 'setParameters() replaces the parameters, so the memo is missed.');
     $this->assertSame($wholesale, $style->getImageStyle(), 'And the memo is re-armed for what it replaced them with.');
+  }
+
+  /**
+   * The focal setters answer their contributed effect ids.
+   *
+   * Acceptance criterion: it answers the **contributed effect** ids its focal
+   * setters produce.
+   *
+   * The mutation fixture above calls `focal()` and `focalWidth()`, so both
+   * contributed effect ids really do reach the built style. Without this
+   * criterion that is a property of what the class happens not to assert;
+   * with it, it is the thing asserted, and the two contributed modules in the
+   * list above are answered for rather than carried along.
+   *
+   * The parameter-to-effect map is read first because it is a pure function of
+   * the parameters and reaches no plugin manager: it says which ids the setters
+   * produce, and it would say so with neither module installed. The built style
+   * is read second because that is where the plugins are created, which is the
+   * part the declared dev dependencies pay for.
+   */
+  public function testItAnswersTheContributedEffectIdsItsFocalSettersProduce(): void {
+    $expectedConversion = version_compare(\Drupal::VERSION, '11.2.0', '>=') ? 'image_convert_avif' : 'image_convert';
+
+    $style = (new NeoImageStyle())->focal(800, 600)->focalWidth(120);
+
+    $this->assertSame(
+      ['focal_point_scale_and_crop', 'focal_point_crop_by_width'],
+      array_keys($style->getImageStyleEffects()),
+      'The parameter-to-effect map answers the contributed effect id each focal setter produces.'
+    );
+    $this->assertSame(
+      ['focal_point_scale_and_crop', 'focal_point_crop_by_width', $expectedConversion],
+      array_column(array_values($style->getImageStyle()->getEffects()->getConfiguration()), 'id'),
+      'And both ids reach the built style, which is what needs their plugins installed.'
+    );
   }
 
   /**

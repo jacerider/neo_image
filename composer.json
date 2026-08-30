@@ -20,5 +20,9 @@
     "drupal/core": "^10.3 || ^11",
     "jacerider/neo": "^1",
     "jacerider/neo_settings": "^1"
+  },
+  "require-dev": {
+    "drupal/crop": "^2.3",
+    "drupal/focal_point": "^2.1"
   }
 }

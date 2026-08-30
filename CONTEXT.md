@@ -177,10 +177,12 @@ than a copy. It needs no contributed module. _Avoid:_ "webp conversion" (the out
 "the webp effect", "webp support".
 
 **Contributed effect** — an effect the **id grammar** admits whose plugin only a contributed module
-provides: the focal-point pair, `f` and `fw`. A **built style** naming one is constructed without
-that module, because core stores an effect's configuration in a lazy collection and instantiates the
-plugin only when something reads the collection back; rendering such a style is what needs it
-installed. _Avoid:_ "optional effect", "the focal dependency", "third-party effect".
+provides: the focal-point pair, `f` and `fw`. A **built style** naming one cannot be constructed
+without that module at all, because adding an effect creates its plugin — `addImageEffect()` hands
+the configuration to the style's plugin collection, which instantiates it there and then — so the
+providing module is needed to build such a style, never mind render it; that is why the test suite
+declares those modules as dev dependencies. _Avoid:_ "optional effect", "the focal dependency",
+"third-party effect".
 
 **WebP sidecar** — the `.webp` file the `webp` contributed module writes beside a derivative on a site
 that installs it. neo_image neither creates, serves nor depends on one; its only dealing with a
