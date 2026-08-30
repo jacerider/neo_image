@@ -326,8 +326,8 @@ class NeoImageStyle {
    * @return $this
    */
   public function size($width, $height):self {
-    $this->parameters['r']['w'] = (int) $width;
-    $this->parameters['r']['h'] = (int) $height;
+    $this->parameters['r']['w'] = $this->settableDimension('w', $width);
+    $this->parameters['r']['h'] = $this->settableDimension('h', $height);
     return $this;
   }
 
@@ -346,10 +346,10 @@ class NeoImageStyle {
       throw new \InvalidArgumentException('Width or height must be set.');
     }
     if ($width) {
-      $this->parameters['s']['w'] = (int) $width;
+      $this->parameters['s']['w'] = $this->settableDimension('w', $width);
     }
     if ($height) {
-      $this->parameters['s']['h'] = (int) $height;
+      $this->parameters['s']['h'] = $this->settableDimension('h', $height);
     }
     return $this;
   }
@@ -395,8 +395,8 @@ class NeoImageStyle {
     if (!isset($anchorKeys[$anchor])) {
       throw new \InvalidArgumentException('Invalid anchor value.');
     }
-    $this->parameters['sc']['w'] = (int) $width;
-    $this->parameters['sc']['h'] = (int) $height;
+    $this->parameters['sc']['w'] = $this->settableDimension('w', $width);
+    $this->parameters['sc']['h'] = $this->settableDimension('h', $height);
     $this->parameters['sc']['a'] = $anchorKeys[$anchor];
     return $this;
   }
@@ -428,8 +428,8 @@ class NeoImageStyle {
     if (!isset($anchorKeys[$anchor])) {
       throw new \InvalidArgumentException('Invalid anchor value.');
     }
-    $this->parameters['c']['w'] = (int) $width;
-    $this->parameters['c']['h'] = (int) $height;
+    $this->parameters['c']['w'] = $this->settableDimension('w', $width);
+    $this->parameters['c']['h'] = $this->settableDimension('h', $height);
     $this->parameters['c']['a'] = $anchorKeys[$anchor];
     return $this;
   }
@@ -457,8 +457,8 @@ class NeoImageStyle {
    * @return $this
    */
   public function focal($width, $height):self {
-    $this->parameters['f']['w'] = (int) $width;
-    $this->parameters['f']['h'] = (int) $height;
+    $this->parameters['f']['w'] = $this->settableDimension('w', $width);
+    $this->parameters['f']['h'] = $this->settableDimension('h', $height);
     return $this;
   }
 
@@ -471,7 +471,7 @@ class NeoImageStyle {
    * @return $this
    */
   public function focalWidth($width):self {
-    $this->parameters['fw']['w'] = (int) $width;
+    $this->parameters['fw']['w'] = $this->settableDimension('w', $width);
     return $this;
   }
 
@@ -490,8 +490,8 @@ class NeoImageStyle {
    * @return $this
    */
   public function exact($width, $height, $anchor = NULL, $bg = NULL):self {
-    $this->parameters['e']['w'] = (int) $width;
-    $this->parameters['e']['h'] = (int) $height;
+    $this->parameters['e']['w'] = $this->settableDimension('w', $width);
+    $this->parameters['e']['h'] = $this->settableDimension('h', $height);
     if ($anchor) {
       $anchorKeys = array_flip($this->properties['a']['values']);
       if (!isset($anchorKeys[$anchor])) {
@@ -501,8 +501,17 @@ class NeoImageStyle {
     }
     if ($bg) {
       // Background color for the canvas, e.g. #ffffff or ffffff. Remove # if
-      // present.
-      $this->parameters['e']['bg'] = ltrim($bg, '#');
+      // present, and store it only when it is a **settable value** — the
+      // stripped value is the one the id will carry, so a lone '#' is a
+      // background this method does not have. A colour outside the id alphabet
+      // is dropped rather than refused: it arrives from a template, and the
+      // property declaration above already argues that an unpadded image is a
+      // better answer to a colour typo than a fatal. Either way it never
+      // reaches an id.
+      $bg = ltrim($bg, '#');
+      if ($this->isSettableValue('bg', $bg)) {
+        $this->parameters['e']['bg'] = $bg;
+      }
     }
     return $this;
   }
@@ -893,22 +902,98 @@ class NeoImageStyle {
    */
   protected function parsePropertyValue(string $id, string $effect, string $property, string $value):int|string {
     $rules = $this->properties[$property];
+    $settable = $this->isSettableValue($property, $value);
     if (isset($rules['values'])) {
-      if (!isset($rules['values'][$value])) {
+      if (!$settable) {
         throw new \InvalidArgumentException(sprintf('The image style id "%s" gives the %s of effect "%s" an unknown value: "%s".', $id, $rules['label'], $effect, $value));
       }
       return $value;
     }
     if (($rules['type'] ?? 'string') === 'integer') {
-      if (!preg_match(self::INTEGER_VALUE, $value)) {
+      if (!$settable) {
         throw new \InvalidArgumentException(sprintf('The image style id "%s" gives the %s of effect "%s" a value that is not a whole number: "%s".', $id, $rules['label'], $effect, $value));
       }
       return (int) $value;
     }
-    if (!preg_match(self::VALUE_ALPHABET, $value)) {
+    if (!$settable) {
       throw new \InvalidArgumentException(sprintf('The image style id "%s" gives the %s of effect "%s" a value outside the id alphabet: "%s".', $id, $rules['label'], $effect, $value));
     }
     return $value;
+  }
+
+  /**
+   * Casts a width or a height and refuses one the **id grammar** cannot carry.
+   *
+   * The cast is the setters' own — every one of them stored `(int) $value` —
+   * and the check runs after it, because the stored value is the one the id
+   * will carry. `(int)` refuses nothing on its own: it answers a negative for a
+   * negative, and the `-` a negative carries is the grammar's own property
+   * separator, so the id built from one is not merely refused by the parse but
+   * parsed as a different property list.
+   *
+   * Zero is a **settable value** and stays one. The grammar admits it,
+   * round-trips it, and this guard implements the grammar rather than an
+   * opinion about sizes. `scale()` and `auto()` refuse a set of falsy
+   * dimensions for a reason of their own that predates this guard and is
+   * untouched by it.
+   *
+   * The message is a bare constant, like every other throw a setter on this
+   * class raises. Naming the argument or reading the value back is the parse
+   * half's shape, and the parse half has a reason for it this does not: it is
+   * naming an id it was handed rather than an argument the caller just typed.
+   *
+   * @param string $property
+   *   The property key the value is stored under, `w` or `h`.
+   * @param string|int|null $value
+   *   The value as the caller passed it.
+   *
+   * @return int
+   *   The cast value.
+   *
+   * @throws \InvalidArgumentException
+   *   When the cast value is outside the **id grammar**.
+   */
+  protected function settableDimension(string $property, $value):int {
+    $value = (int) $value;
+    if (!$this->isSettableValue($property, $value)) {
+      throw new \InvalidArgumentException('Invalid width or height value.');
+    }
+    return $value;
+  }
+
+  /**
+   * Whether one property's value is a **settable value**.
+   *
+   * The single statement of what a value may be, read off the class's own
+   * property declaration and the two constants above it. Both ends of the
+   * **codec** ask it: the parse half, which turns a FALSE into the message that
+   * names the id it was handed, and every setter that writes a width, a height
+   * or a background, which answers a FALSE its own way. A second copy of this
+   * vocabulary beside the first is how a grammar drifts, and a drifted grammar
+   * answers 404 for ids this module itself produced.
+   *
+   * It is deliberately a predicate rather than a thrower, because its two
+   * callers want two different reactions to the same FALSE. It is protected: a
+   * subclass can reach it, and nothing new is promised to the fleet.
+   *
+   * @param string $property
+   *   The property key.
+   * @param string|int $value
+   *   The value as the id will carry it — after a setter's cast, and after
+   *   `exact()` has stripped a background's leading hash.
+   *
+   * @return bool
+   *   Whether the **id grammar** can carry it.
+   */
+  protected function isSettableValue(string $property, string|int $value):bool {
+    $rules = $this->properties[$property];
+    if (isset($rules['values'])) {
+      return isset($rules['values'][$value]);
+    }
+    if (($rules['type'] ?? 'string') === 'integer') {
+      return (bool) preg_match(self::INTEGER_VALUE, (string) $value);
+    }
+    return (bool) preg_match(self::VALUE_ALPHABET, (string) $value);
   }
 
   /**

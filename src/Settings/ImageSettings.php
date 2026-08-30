@@ -196,6 +196,25 @@ final class ImageSettings extends SettingsBase {
           ],
         ],
       ];
+      // The pattern is the **settable value** rule for a background, which is
+      // what closes the only config-sourced producer of one
+      // `NeoImageStyle::exact()` will refuse to store. That setter drops a
+      // value the **id grammar** cannot carry rather than throwing, because a
+      // colour usually arrives from a template and an unpadded image beats a
+      // white screen — so without this the form could save a background that
+      // then silently did nothing. Reporting it here is the convention
+      // `validateForm()` below already states: a value the manager does not
+      // know is reported on the form rather than fataling it.
+      //
+      // It is the id alphabet applied to the value *after* the leading hash is
+      // stripped, because that is the rule `exact()` applies and this element
+      // has to refuse exactly what that setter would drop — no more. The
+      // leading hashes are therefore tolerated rather than admitted into the
+      // alphabet: `#field_prefix` already renders one and the placeholder asks
+      // for the six characters after it, but a site that typed one anyway has
+      // been saving a background that works, and this is not the place to take
+      // it away. A hash with nothing after it is refused, which is the value
+      // that used to reach an id as the empty string.
       $form['dimensions'][$size]['settings']['bg'] = [
         '#type' => 'textfield',
         '#title' => $this->t('Background'),
@@ -203,6 +222,7 @@ final class ImageSettings extends SettingsBase {
         '#default_value' => $bg,
         '#size' => 10,
         '#maxlength' => 7,
+        '#pattern' => '#*[A-Za-z0-9]+',
         '#placeholder' => 'FFFFFF',
         '#field_prefix' => '#',
         '#states' => [
