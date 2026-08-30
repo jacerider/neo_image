@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace Drupal\Tests\neo_image\Kernel;
 
+use Drupal\Component\Render\FormattableMarkup;
 use Drupal\Core\Field\FieldDefinitionInterface;
 use Drupal\Core\Field\FieldItemListInterface;
 use Drupal\Core\File\FileExists;
@@ -55,6 +56,15 @@ use PHPUnit\Framework\Attributes\Group;
  * **The log is read from `dblog`.** The criterion is a warning naming the
  * entity that was skipped; the mechanism is the implementer's choice, and the
  * watchdog table is the one a site owner actually reads.
+ *
+ * **One record per field render, not one per delta.** The report sits after
+ * the loop rather than inside it: a field with two unrenderable references
+ * files one warning naming both and saying there were two, and a second field
+ * render that skips something files its own. Every value that record
+ * interpolates is composed as a string first, because `FormattableMarkup`
+ * escapes each one through a non-nullable `string` parameter and a NULL there
+ * is a `TypeError` at the moment a site owner opens the report to read the
+ * warning.
  *
  * **Why kernel and not unit.** Every subject is a media entity resolved through
  * its source plugin and its thumbnail reference, reached through a real field
@@ -271,6 +281,160 @@ final class FormatterAsksInsteadOfCatchingTest extends KernelTestBase {
   }
 
   /**
+   * It files one record for every reference one field render skips.
+   *
+   * The volume finding, stated as its own criterion. The log call sat inside
+   * the delta loop, so a field with two unrenderable references filed two
+   * near-identical records. They arrive together and each describes a
+   * condition that is constant for the field rather than for the delta, so
+   * what a site owner reads is not two diagnoses; it is one diagnosis
+   * repeated until the interesting entries around it are pushed off the page.
+   */
+  public function testItFilesOneRecordForEveryReferenceOneFieldRenderSkips(): void {
+    $host = EntityTest::create([
+      'name' => 'Host',
+      self::MEDIA_FIELD => [
+        ['target_id' => $this->createMediaWithMissingThumbnail()->id()],
+        ['target_id' => $this->createMediaWithMissingThumbnail()->id()],
+      ],
+    ]);
+    $host->save();
+
+    $this->viewElements($host->get(self::MEDIA_FIELD));
+
+    $this->assertCount(
+      1,
+      $this->neoImageLogRecords(),
+      'Two skipped references in one field render leave one record.'
+    );
+  }
+
+  /**
+   * Its record names every reference it skipped and how many there were.
+   *
+   * Collapsing the volume must not collapse the diagnosis. Every fragment the
+   * per-delta message carried survives, and the count is new — it is the thing
+   * a reader most wants and previously had to get by counting rows.
+   */
+  public function testItsRecordNamesEveryReferenceItSkippedAndHowMany(): void {
+    $first = $this->createMediaWithMissingThumbnail();
+    $second = $this->createMediaWithMissingThumbnail();
+    $host = EntityTest::create([
+      'name' => 'Host',
+      self::MEDIA_FIELD => [
+        ['target_id' => $first->id()],
+        ['target_id' => $second->id()],
+      ],
+    ]);
+    $host->save();
+
+    $this->viewElements($host->get(self::MEDIA_FIELD));
+
+    $records = $this->neoImageLogRecords();
+    $this->assertCount(1, $records);
+    $record = reset($records);
+    $message = $this->renderRecord($record);
+    $this->assertStringContainsString('media:' . $first->id(), $message, 'The record names the first reference it skipped.');
+    $this->assertStringContainsString('media:' . $second->id(), $message, 'The record names the second reference it skipped.');
+    $this->assertSame('2', $this->recordVariables($record)['@skipped_count'] ?? NULL, 'The record says how many references it skipped.');
+  }
+
+  /**
+   * A second field render that skips something files its own record.
+   *
+   * "Once" is once per `viewElements()` call, not once per request and not
+   * once per entity. The state is a local array that dies with the call, so
+   * there is no mechanism that could dedupe across calls and silently swallow
+   * a second field's diagnosis.
+   */
+  public function testEachFieldRenderThatSkipsSomethingFilesItsOwnRecord(): void {
+    $other = EntityTest::create(['name' => 'Not an image']);
+    $other->save();
+    $host = EntityTest::create([
+      'name' => 'Host',
+      self::MEDIA_FIELD => [
+        ['target_id' => $this->createMediaWithMissingThumbnail()->id()],
+        ['target_id' => $this->createMediaWithMissingThumbnail()->id()],
+      ],
+      self::OTHER_FIELD => [['target_id' => $other->id()]],
+    ]);
+    $host->save();
+
+    $this->viewElements($host->get(self::MEDIA_FIELD));
+    $this->viewElements($host->get(self::OTHER_FIELD));
+
+    $records = $this->neoImageLogRecords();
+    $this->assertCount(2, $records, 'Each field render that skips something files its own record.');
+    $messages = [];
+    foreach ($records as $record) {
+      $messages[] = $this->renderRecord($record);
+    }
+    $this->assertStringContainsString(self::MEDIA_FIELD, $messages[0], 'The first record is about the first field.');
+    $this->assertStringContainsString(self::OTHER_FIELD, $messages[1], 'The second record is about the second field.');
+  }
+
+  /**
+   * It files a record the report view can render, label or no label.
+   *
+   * `FormattableMarkup` hands every placeholder value to `Html::escape()`,
+   * whose parameter is a non-nullable `string`, so a NULL there is a
+   * `TypeError` at the moment the stored entry is rendered — which is to say
+   * when a site owner opens the report to read the warning. The branch that
+   * logs is by construction the branch that admits entities of every type,
+   * including ones whose label field is empty, so a reference with no label
+   * really does reach the message.
+   *
+   * The assertion is the construction `DbLogController::formatMessage()`
+   * makes rather than a proxy for it: `strtr()` swallows the NULL that the
+   * report view does not.
+   */
+  public function testItFilesOneRecordTheReportViewCanRender(): void {
+    $nameless = EntityTest::create([]);
+    $nameless->save();
+    $this->assertNull($nameless->label(), 'The fixture really has no label.');
+    $host = EntityTest::create([
+      'name' => 'Host',
+      self::OTHER_FIELD => [['target_id' => $nameless->id()]],
+    ]);
+    $host->save();
+
+    $this->viewElements($host->get(self::OTHER_FIELD));
+
+    $records = $this->neoImageLogRecords();
+    $this->assertCount(1, $records);
+    $message = $this->renderRecord(reset($records));
+    $this->assertStringContainsString('entity_test:' . $nameless->id(), $message, 'The record names the reference that has no label.');
+  }
+
+  /**
+   * Its record is still a warning on the module channel, naming the field.
+   *
+   * Severity does not move: both conditions the guard can see are faults, and
+   * the entity type in each fragment already says which one applied. The field
+   * name survives the rewrite too — it is what tells a site builder which
+   * display to go and fix.
+   */
+  public function testItsRecordKeepsItsWarningLevelChannelAndFieldName(): void {
+    $host = EntityTest::create([
+      'name' => 'Host',
+      self::MEDIA_FIELD => [
+        ['target_id' => $this->createMediaWithMissingThumbnail()->id()],
+        ['target_id' => $this->createMediaWithMissingThumbnail()->id()],
+      ],
+    ]);
+    $host->save();
+
+    $this->viewElements($host->get(self::MEDIA_FIELD));
+
+    $records = $this->neoImageLogRecords();
+    $this->assertCount(1, $records);
+    $record = reset($records);
+    $this->assertSame('neo_image', $record->type, 'The record is on the module channel.');
+    $this->assertSame(RfcLogLevel::WARNING, (int) $record->severity, 'The record is a warning.');
+    $this->assertStringContainsString(self::MEDIA_FIELD, $this->renderRecord($record), 'The record names the field.');
+  }
+
+  /**
    * Runs the formatter over one field, the pair an entity display calls.
    *
    * @param \Drupal\Core\Field\FieldItemListInterface $items
@@ -422,6 +586,39 @@ final class FormatterAsksInsteadOfCatchingTest extends KernelTestBase {
       ->orderBy('w.wid')
       ->execute()
       ->fetchAll();
+  }
+
+  /**
+   * Renders a stored record the way the dblog report view renders it.
+   *
+   * `DbLogController::formatMessage()` builds a `FormattableMarkup` from the
+   * stored message and its unserialised variables, so that is the construction
+   * asserted here. A placeholder value that is NULL raises a `TypeError` at
+   * this point and nowhere earlier.
+   *
+   * @param object $record
+   *   The watchdog row.
+   *
+   * @return string
+   *   The message as the report view would show it.
+   */
+  private function renderRecord(object $record): string {
+    return (string) new FormattableMarkup($record->message, $this->recordVariables($record));
+  }
+
+  /**
+   * Unserialises a stored record's placeholder values.
+   *
+   * @param object $record
+   *   The watchdog row.
+   *
+   * @return array
+   *   The placeholder values, keyed by placeholder.
+   */
+  private function recordVariables(object $record): array {
+    $variables = \unserialize($record->variables, ['allowed_classes' => FALSE]);
+    $this->assertIsArray($variables);
+    return $variables;
   }
 
 }

@@ -162,6 +162,11 @@ class NeoImageBaseFormatter extends EntityReferenceFormatterBase {
     $entities = $this->getEntitiesToView($items, $langcode);
     $imageSettings = $this->getSetting('image');
     $imageDimensions = $imageSettings['dimensions'] ?? [];
+    // Every reference this render skips, named as the loop passes it. The
+    // list is local to the call and drained after the loop, because the
+    // diagnosis is about one field render: state that outlived the method is
+    // how a second field's diagnosis gets silently swallowed.
+    $skipped = [];
 
     foreach ($entities as $delta => $entity) {
       // Ask for the resolved file before building anything. This one check is
@@ -171,13 +176,9 @@ class NeoImageBaseFormatter extends EntityReferenceFormatterBase {
       // parameter it does not satisfy.
       if ((!$entity instanceof MediaInterface && !$entity instanceof FileInterface) || !NeoImageUtility::resolvedFile($entity)) {
         // Name what was skipped. A warning that only said an image was missing
-        // would be the silence this replaces with extra steps.
-        $this->logger->warning('No image was rendered for @entity_type @entity_id (%label) referenced by @field_name: it resolves to no file.', [
-          '@entity_type' => $entity->getEntityTypeId(),
-          '@entity_id' => $entity->id(),
-          '%label' => $entity->label(),
-          '@field_name' => $items->getName(),
-        ]);
+        // would be the silence this replaces with extra steps. The loop only
+        // collects; the report is filed once, after it.
+        $skipped[] = $this->describeSkippedReference($entity);
         continue;
       }
 
@@ -201,7 +202,60 @@ class NeoImageBaseFormatter extends EntityReferenceFormatterBase {
       $this->renderer->addCacheableDependency($elements[$delta], $entity);
     }
 
+    // One record for the whole field render rather than one per delta. A
+    // field with twelve unrenderable references filed twelve near-identical
+    // records that arrived together, each describing a condition constant for
+    // the field, which is one diagnosis repeated until the interesting
+    // entries around it are pushed off the page. Severity does not move with
+    // it: both conditions the guard above can see are faults — a target that
+    // is neither a media nor a file is a misconfigured display, a media with
+    // no resolved file is a data fault — and the entity type in each fragment
+    // already says which one applied, so one message at one severity carries
+    // the whole distinction without a second string to keep in step.
+    if ($skipped) {
+      $this->logger->warning('No image was rendered for @skipped_count of the references in @field_name: @references. A reference is skipped when its target is neither a media nor a file, or when it resolves to no file.', [
+        '@skipped_count' => (string) count($skipped),
+        '@field_name' => $items->getName(),
+        '@references' => implode(', ', $skipped),
+      ]);
+    }
+
     return $elements;
+  }
+
+  /**
+   * Names one skipped reference for the record, never answering NULL.
+   *
+   * `{entity type}:{id}`, with the label parenthesised where there is one:
+   * machine-readable first, human-readable second, and it degrades cleanly
+   * when either half is missing.
+   *
+   * The composition is the point. `FormattableMarkup` hands every placeholder
+   * value to `Html::escape()`, whose parameter is a non-nullable `string`, so
+   * a NULL is a `TypeError` at the moment the stored entry is rendered — which
+   * is to say when a site owner opens the report to read the warning. This is
+   * the same guard the toolkit-unsupported warning in `neo_image.module`
+   * applies, written for the same reason.
+   *
+   * Both NULL values are reachable here. An autocreated reference that has not
+   * been saved has no id — `prepareView()` marks such an item loaded on
+   * `hasNewEntity()`, so it arrives in this loop — and `new` states the only
+   * fact that can produce it rather than hiding it. A label is absent whenever
+   * the referenced entity's label field is empty, which this branch admits by
+   * construction because it is the branch for entities of every type; the
+   * parenthetical is dropped rather than filled with an invented string where
+   * a reader expects an editor's words.
+   *
+   * @param \Drupal\Core\Entity\EntityInterface $entity
+   *   The reference that was skipped.
+   *
+   * @return string
+   *   The fragment naming it.
+   */
+  protected function describeSkippedReference(EntityInterface $entity): string {
+    $fragment = $entity->getEntityTypeId() . ':' . ($entity->id() ?? 'new');
+    $label = (string) ($entity->label() ?? '');
+    return $label === '' ? $fragment : $fragment . ' (' . $label . ')';
   }
 
   /**
