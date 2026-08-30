@@ -45,6 +45,12 @@ use PHPUnit\Framework\Attributes\Group;
  * manager already parsed instead, and reports a value the manager does not know
  * as a form error.
  *
+ * **The boundary moved once, by one id.** ADR 0014 made the bare prefix a
+ * legal **style id** naming the **identity style**, so the converter upcasts it
+ * and the manager lists its directory. Neither consumer was edited for it —
+ * they answer whatever the **codec** answers — which is why both are asserted
+ * here, beside the reactions they still have to a genuinely **rejected id**.
+ *
  * **Why kernel and not unit.** None of the three subjects is pure: the
  * converter loads a config entity before it reaches the codec, the manager
  * walks real stream wrappers, and the settings plugin is built by a form.
@@ -72,6 +78,11 @@ final class RejectedIdConsumerReactionsTest extends KernelTestBase {
    * A well-formed id: a scale effect at width 300.
    */
   private const ACCEPTED_ID = 'neo-s--w-300';
+
+  /**
+   * The bare prefix: a well-formed id naming the **identity style**.
+   */
+  private const IDENTITY_ID = 'neo-';
 
   /**
    * {@inheritdoc}
@@ -119,7 +130,7 @@ final class RejectedIdConsumerReactionsTest extends KernelTestBase {
     $converter = $this->container->get('neo_image.param_converter');
     $definition = ['type' => 'image_style_dynamic'];
 
-    foreach ([self::REJECTED_ID, self::REJECTED_ID_NO_VALUE, 'neo-x--w-1', 'neo-'] as $rejected) {
+    foreach ([self::REJECTED_ID, self::REJECTED_ID_NO_VALUE, 'neo-x--w-1'] as $rejected) {
       $this->assertNull(
         $converter->convert($rejected, $definition, 'image_style', []),
         sprintf('The converter answers nothing for "%s".', $rejected)
@@ -159,11 +170,18 @@ final class RejectedIdConsumerReactionsTest extends KernelTestBase {
    * Acceptance criterion: it still upcasts a configured image style, and still
    * builds a style from a well-formed neo name.
    *
-   * The blast radius of the refusal, stated. This is a regression pin rather
-   * than a driver: it is green before the change as well as after, because
-   * nothing well-formed is allowed to move. The three answers the converter can
-   * give — a config entity, a built style, nothing at all — are pinned
-   * together, since the change adds a fourth path into the third of them.
+   * The blast radius of the refusal, stated. The three answers the converter
+   * can give — a config entity, a built style, nothing at all — are pinned
+   * together, because each refusal added since has been a fourth path into the
+   * third of them.
+   *
+   * The **identity style** is asserted here rather than beside the refusals,
+   * which is where the bare prefix used to be listed: ADR 0014 made it a legal
+   * **style id**, so the converter upcasts it like any other well-formed name.
+   * What it upcasts to is the whole of the claim — a **built style** carrying
+   * the **format conversion** and no other effect — because that is what makes
+   * the URL it names resolve instead of 404, and what adopts the `neo-`
+   * **derivative directories** a fleet already carries.
    */
   public function testItStillUpcastsConfiguredStylesAndBuildsWellFormedNeoNames(): void {
     $converter = $this->container->get('neo_image.param_converter');
@@ -183,6 +201,19 @@ final class RejectedIdConsumerReactionsTest extends KernelTestBase {
       'A well-formed neo name still builds a style, named the same as the id that asked for it.'
     );
     $this->assertNotEmpty($built->getEffects()->getConfiguration(), 'And that style still carries its effects.');
+
+    $identity = $converter->convert(self::IDENTITY_ID, $definition, 'image_style', []);
+    $this->assertInstanceOf(ImageStyleInterface::class, $identity);
+    $this->assertSame(
+      self::IDENTITY_ID,
+      $identity->getName(),
+      'The bare prefix upcasts to the identity style, named by the id that asked for it.'
+    );
+    $this->assertSame(
+      [$this->conversionEffectId()],
+      array_column($identity->getEffects()->getConfiguration(), 'id'),
+      'And the format conversion is the only effect it carries.'
+    );
 
     $this->assertNull(
       $converter->convert('no_such_style', $definition, 'image_style', []),
@@ -236,6 +267,53 @@ final class RejectedIdConsumerReactionsTest extends KernelTestBase {
       self::REJECTED_ID,
       $message,
       'The record names the directory it skipped.'
+    );
+  }
+
+  /**
+   * A bare-prefix directory is a style, and the manager says nothing about it.
+   *
+   * Acceptance criterion: the style manager lists a `neo-` directory as a style
+   * and logs no warning about it.
+   *
+   * The manager promotes every name the **codec** admits, so this needed no
+   * edit of its own — which is the point of asserting it. Before ADR 0014 a
+   * `neo-` **derivative directory** was a **rejected id**: skipped, never a
+   * style, and named in a warning once per request for the life of the site.
+   * The module writes those directories itself, through any caller that reaches
+   * `getImageStyle()->buildUri()` with an effect-less style, so the log was
+   * repeating a complaint about the module's own output.
+   *
+   * `testItSkipsAnUnparseableStylesDirectoryAndLogsItOnce()` is deliberately
+   * left alone rather than extended: it is driven by a genuinely rejected id,
+   * and the skip-and-log reaction it pins is unchanged. This is a second case
+   * because the admission moved one directory across the boundary, not because
+   * the boundary moved.
+   */
+  public function testItListsTheBarePrefixDirectoryAmongTheStylesAndSaysNothingAboutIt(): void {
+    $this->makeStyleDirectory(self::ACCEPTED_ID);
+    $this->makeStyleDirectory(self::IDENTITY_ID);
+
+    $styles = $this->container->get('neo_image.style_manager')->getStyles();
+
+    $this->assertArrayHasKey(self::ACCEPTED_ID, $styles, 'A directory with effects is still a style.');
+    $this->assertArrayHasKey(self::IDENTITY_ID, $styles, 'And so is the bare prefix: the identity style.');
+    $this->assertInstanceOf(NeoImageStyle::class, $styles[self::IDENTITY_ID]);
+    $this->assertSame(
+      [],
+      $styles[self::IDENTITY_ID]->getParameters(),
+      'It carries no parameters, which is what the identity style is.'
+    );
+    $this->assertSame(
+      self::IDENTITY_ID,
+      $styles[self::IDENTITY_ID]->getImageStyleName(),
+      'And it serialises back to the directory it was read from.'
+    );
+
+    $this->assertCount(
+      0,
+      $this->neoImageLogRecords(),
+      'The manager says nothing about a directory it can parse.'
     );
   }
 
@@ -318,6 +396,19 @@ final class RejectedIdConsumerReactionsTest extends KernelTestBase {
     $this->assertSame('', $formState->getValue(['dimensions', 'sm', 'height']));
     $this->assertFalse($formState->getValue(['dimensions', 'sm', 'exact']));
     $this->assertNull($formState->getValue(['dimensions', 'sm', 'style']), 'The id is never saved.');
+  }
+
+  /**
+   * The core convert effect a **built style** appends, for this core version.
+   *
+   * Derived the way the class derives it rather than hard-coded, so the
+   * assertion pins the rule instead of the core a given site runs.
+   *
+   * @return string
+   *   The image effect plugin id.
+   */
+  private function conversionEffectId(): string {
+    return version_compare(\Drupal::VERSION, '11.2.0', '>=') ? 'image_convert_avif' : 'image_convert';
   }
 
   /**

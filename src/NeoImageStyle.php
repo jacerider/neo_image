@@ -778,11 +778,16 @@ class NeoImageStyle {
    * different reactions to a refusal, and a second entry into one grammar is
    * how a grammar drifts.
    *
+   * The bare prefix is the one id with no body, and it answers no parameters
+   * rather than throwing: it names the **identity style**, which makes the two
+   * halves inverses over the empty parameter set as they are over every other.
+   *
    * @param string $id
    *   The id.
    *
    * @return array
-   *   The parameters. A width or a height comes back as an integer, because
+   *   The parameters, empty for the **identity style**. A width or a height
+   *   comes back as an integer, because
    *   validation has already proved it is digits — which is what makes the
    *   width and height getters' declared `int` returns honest rather than
    *   dependent on PHP coercing a string.
@@ -796,7 +801,17 @@ class NeoImageStyle {
     }
     $body = substr($id, strlen(self::ID_PREFIX));
     if ($body === '') {
-      throw new \InvalidArgumentException(sprintf('The image style id "%s" names no effect.', $id));
+      // The prefix alone is the **identity style**: no parameters, and a
+      // **built style** carrying the **format conversion** and nothing else.
+      // It is admitted rather than refused because the serialise half produces
+      // it — `convertParamsToId([])` answers it, and a style with no effects is
+      // what the constructor with no options builds — and because a caller
+      // reaching `getImageStyle()->buildUri()` with one writes the matching
+      // **derivative directory** to disk. Refusing it made every such URL a
+      // permanent 404 and every such directory a warning per request. See ADR
+      // 0014. Only the whole body: an empty *segment* is a malformed list and
+      // is refused below with the rest.
+      return [];
     }
     $params = [];
     foreach (explode('~', $body) as $segment) {

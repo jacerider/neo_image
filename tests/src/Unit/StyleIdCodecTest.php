@@ -83,6 +83,55 @@ final class StyleIdCodecTest extends UnitTestCase {
   }
 
   /**
+   * It admits the bare prefix, which names the **identity style**.
+   *
+   * Acceptance criteria: *it parses the bare prefix to no parameters*, and *it
+   * serialises no parameters back to the bare prefix, and parses that id back
+   * to no parameters*.
+   *
+   * The **codec**'s two halves are inverses over the empty parameter set as
+   * they are over every other. A style carrying no effects is producible by
+   * supported calls — the constructor takes no options, and a style url asked
+   * for with none builds one — and the serialise half cannot refuse it,
+   * because it runs on every render from `getImageStyleName()` and a throw
+   * there is a white screen. So the parse half admits what the serialise half
+   * has always produced: `neo-` is a legal **style id**, naming the **identity
+   * style**, whose **built style** is the **format conversion** and nothing
+   * else. It was refused until ADR 0014, and every URL built from an
+   * effect-less style was a permanent 404 naming a **derivative directory**
+   * the **style scan** then logged once a request forever.
+   *
+   * **No parameters, not a sentinel.** `[]` serialises straight back, and every
+   * accessor already answers for it, which is what the second half of this
+   * method says. `providerGrammarIds` cannot cover the id: it derives its rows
+   * from the effect declarations and an empty body names no effect, so the
+   * identity style is asserted here rather than folded into that enumeration.
+   *
+   * **Only the empty body.** An empty *segment* stays a **rejected id** —
+   * `neo-cs~`, `neo-~cs`, `neo-cs~~s--w-300` and `neo-s--` are in the refusal
+   * providers above, and the admission is not allowed to reach them.
+   */
+  public function testAdmitsTheBarePrefixAsTheIdentityStyle(): void {
+    $codec = new NeoImageStyle();
+
+    $this->assertSame([], $codec->convertIdToParams('neo-'), 'the bare prefix parses to no parameters');
+    $this->assertSame('neo-', $codec->convertParamsToId([]), 'and no parameters serialise back to the bare prefix');
+    $this->assertSame(
+      [],
+      $codec->convertIdToParams($codec->convertParamsToId([])),
+      'so the two halves are inverses over the empty parameter set as well'
+    );
+
+    $style = (new NeoImageStyle())->setParameters($codec->convertIdToParams('neo-'));
+    $this->assertSame('neo-', $style->getImageStyleName(), 'the style it names carries the id that asked for it');
+    $this->assertSame(0, $style->getEffectCount(), 'and no effects');
+    $this->assertNull($style->getWidth(), 'so it answers no width');
+    $this->assertNull($style->getHeight(), 'and no height');
+    $this->assertSame('', $style->label(), 'and an empty label');
+    $this->assertSame([], $style->getImageStyleEffects(), 'and an empty effect list');
+  }
+
+  /**
    * It refuses an unknown key, a missing value and a value outside its rules.
    *
    * Acceptance criterion: *it refuses an unknown effect key, an unknown
@@ -178,6 +227,11 @@ final class StyleIdCodecTest extends UnitTestCase {
    * string belongs to a configured image style and is none of this codec's
    * business.
    *
+   * The prefix *alone* is not among them. It is a legal id naming the
+   * **identity style**, and `testAdmitsTheBarePrefixAsTheIdentityStyle()` is
+   * where it is asserted; what stays refused here is an empty *segment*, which
+   * is a malformed list rather than a style with nothing in it.
+   *
    * @param string $description
    *   What the row covers.
    * @param string $id
@@ -220,10 +274,10 @@ final class StyleIdCodecTest extends UnitTestCase {
     yield 'wrong prefix' => ['another prefix entirely', 'foo-s--w-300'];
     yield 'configured style name' => ['a configured image style name', 'large'];
     yield 'prefix without a hyphen' => ['the prefix without its hyphen', 'neos--w-300'];
-    yield 'prefix alone' => ['the prefix and nothing else', 'neo-'];
     yield 'empty id' => ['the empty string', ''];
     yield 'trailing separator' => ['a separator with no effect behind it', 'neo-cs~'];
     yield 'leading separator' => ['a separator with no effect in front of it', 'neo-~cs'];
+    yield 'separator between effects' => ['a separator with no effect between two', 'neo-cs~~s--w-300'];
   }
 
   /**
@@ -292,11 +346,19 @@ final class StyleIdCodecTest extends UnitTestCase {
   /**
    * Parameter sets the grammar refuses but the producer still serialises.
    *
+   * **Every row must be a set the grammar refuses.** The test's
+   * `expectException()` lives once in the method body and is shared by every
+   * row, so a row that stops being refused cannot be spared there — sparing it
+   * disarms the refusal half for all the others and nothing goes red. It leaves
+   * this provider instead. That is what the empty parameter set did when the
+   * bare prefix became the **identity style**, and
+   * `testAdmitsTheBarePrefixAsTheIdentityStyle()` carries the serialise half it
+   * was proving.
+   *
    * @return \Generator
    *   Rows of description, parameters and the id they serialise to.
    */
   public static function providerParametersOutsideTheGrammar(): \Generator {
-    yield 'no parameters' => ['a style with no effects at all', [], 'neo-'];
     yield 'unknown effect' => ['an effect key the grammar does not declare', ['x' => ['w' => 1]], 'neo-x--w-1'];
     yield 'unknown property' => ['a property key the grammar does not declare', ['s' => ['z' => 1]], 'neo-s--z-1'];
     yield 'empty configuration' => ['an effect whose configuration is an empty array', ['s' => []], 'neo-s--'];
