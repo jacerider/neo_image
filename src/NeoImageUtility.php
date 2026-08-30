@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace Drupal\neo_image;
 
+use Drupal\Core\Cache\CacheableMetadata;
 use Drupal\file\FileInterface;
 use Drupal\media\MediaInterface;
 use Drupal\media\MediaTypeInterface;
@@ -104,6 +105,48 @@ abstract class NeoImageUtility {
       }
     }
     return $authored;
+  }
+
+  /**
+   * Derives the cache metadata a render of a subject entity depends on.
+   *
+   * The **subject cacheability**: the subject entity's own cacheability merged
+   * with its **resolved file**'s. Both halves are read per render — the
+   * authored alt and title come from the subject, the URI comes from the file
+   * — and the two go stale independently, so declaring the subject alone
+   * leaves a file replaced behind an unsaved media serving a stale render.
+   * That is precisely the half a hand-written declaration in a caller gets
+   * wrong.
+   *
+   * It takes the subject alone and resolves the file itself, so it can never
+   * be handed a file belonging to a different subject, and it matches the two
+   * derivations beside it: one subject in, one answer out. The resolution is a
+   * property read on an entity the caller has just loaded, not a query.
+   *
+   * It **never refuses**, in keeping with `resolvedFile()`'s rule: a subject
+   * that resolves to no file answers the subject's own metadata alone, so a
+   * caller may derive this before knowing whether a render will happen.
+   *
+   * Nothing is added beyond the declaration — no cache contexts, no max-age of
+   * this module's invention, no access result. Neither render **entry point**
+   * checks `view` access, and adding one here would be a behaviour change
+   * wearing a caching change's clothes.
+   *
+   * @param \Drupal\media\MediaInterface|\Drupal\file\FileInterface $entity
+   *   The media or file entity a render is built from.
+   *
+   * @return \Drupal\Core\Cache\CacheableMetadata
+   *   The metadata the render depends on. Applied to a render array with
+   *   `applyTo()`, or merged into another element with
+   *   `addCacheableDependency()`.
+   */
+  public static function subjectCacheability(MediaInterface|FileInterface $entity): CacheableMetadata {
+    $cacheability = CacheableMetadata::createFromObject($entity);
+    $file = static::resolvedFile($entity);
+    if ($file) {
+      $cacheability = $cacheability->merge(CacheableMetadata::createFromObject($file));
+    }
+    return $cacheability;
   }
 
   /**

@@ -991,9 +991,11 @@ class NeoImageStyle {
    *   The attributes.
    *
    * @return array
-   *   The renderable array. Empty when the entity resolves to no file — the
-   *   **failure contract** of a render **entry point**, which renders nothing
-   *   and throws nothing. A caller that wants to know it happened asks
+   *   The renderable array, carrying the **subject cacheability** it was built
+   *   from, so a caller need not declare a dependency the render already took.
+   *   Empty when the entity resolves to no file — the **failure contract** of a
+   *   render **entry point**, which renders nothing, throws nothing and
+   *   declares nothing. A caller that wants to know it happened asks
    *   `NeoImageUtility::resolvedFile()` first.
    */
   public function toRenderableFromEntity(MediaInterface|FileInterface $entity, $alt = NULL, $title = NULL, $attributes = []):array {
@@ -1017,7 +1019,7 @@ class NeoImageStyle {
     if (!$file) {
       return $build;
     }
-    return [
+    $build = [
       '#theme' => 'neo_image_style',
       '#neoImageStyle' => $this,
       '#uri' => $file->getFileUri(),
@@ -1025,6 +1027,14 @@ class NeoImageStyle {
       '#title' => $title,
       '#attributes' => $attributes,
     ];
+    // The render read two entities — the subject for its alt and title, the
+    // file it resolved to for the URI — so it declares both. Applied after the
+    // guard on purpose: the empty answer above is this entry point's **failure
+    // contract**, callers branch on its truthiness, and an array carrying one
+    // key is truthy. Tags without `#cache[keys]` create no cache entry, so this
+    // costs nothing per render and changes no markup.
+    NeoImageUtility::subjectCacheability($entity)->applyTo($build);
+    return $build;
   }
 
   /**
