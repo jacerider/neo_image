@@ -42,21 +42,20 @@ function neo_image_theme() {
 /**
  * Prepares variables for a responsive image.
  *
- * Default template: responsive-image.html.twig.
+ * Default template: neo-image.html.twig.
  *
  * @param array $variables
  *   An associative array containing:
  *   - neoImage: The Neo image.
- *   - alt: The alternative text for text-based browsers. HTML 4 and XHTML 1.0
- *     always require an alt attribute. The HTML 5 draft allows the alt
- *     attribute to be omitted in some cases. Therefore, this variable defaults
- *     to an empty string, but can be set to NULL for the attribute to be
- *     omitted. Usually, neither omission nor an empty string satisfies
- *     accessibility requirements, so it is strongly encouraged for code using
- *     '#theme' => 'neo_image' to pass a meaningful value for this variable.
- *     - http://www.w3.org/TR/REC-html40/struct/objects.html#h-13.8
- *     - http://www.w3.org/TR/xhtml1/dtds.html
- *     - http://dev.w3.org/html5/spec/Overview.html#alt
+ *   - alt: The alternative text for the image. It is always emitted: NULL and
+ *     the empty string are the same input here, and both produce an empty
+ *     attribute. Omitting the attribute is not available on any path. The
+ *     floor is applied by the controlling image, which is a single-style
+ *     render and where the assignment lives; the <source> elements carry no
+ *     alt at all, so this concerns the <img> and nothing else. An empty alt
+ *     asserts that the image is decorative, so code using
+ *     '#theme' => 'neo_image' that holds a meaningful value should still pass
+ *     it rather than publish that claim.
  *   - title: The title text is displayed when the image is hovered in some
  *     popular browsers.
  *   - attributes: Associative array of additional attributes to be placed in
@@ -110,7 +109,7 @@ function template_preprocess_neo_image(&$variables) {
 /**
  * Prepares variables for image style templates.
  *
- * Default template: image-style.html.twig.
+ * Default template: neo-image-style.html.twig.
  *
  * @param array $variables
  *   An associative array containing:
@@ -118,17 +117,12 @@ function template_preprocess_neo_image(&$variables) {
  *   - height: The height of the image.
  *   - style_name: The name of the image style to be applied.
  *   - uri: URI of the source image before styling.
- *   - alt: The alternative text for text-based browsers. HTML 4 and XHTML 1.0
- *     always require an alt attribute. The HTML 5 draft allows the alt
- *     attribute to be omitted in some cases. Therefore, this variable defaults
- *     to an empty string, but can be set to NULL for the attribute to be
- *     omitted. Usually, neither omission nor an empty string satisfies
- *     accessibility requirements, so it is strongly encouraged for code using
- *     '#theme' => 'neo_image_style' to pass a meaningful value for this
- *     variable.
- *     - http://www.w3.org/TR/REC-html40/struct/objects.html#h-13.8
- *     - http://www.w3.org/TR/xhtml1/dtds.html
- *     - http://dev.w3.org/html5/spec/Overview.html#alt
+ *   - alt: The alternative text for the image. It is always emitted: NULL and
+ *     the empty string are the same input here, and both produce an empty
+ *     attribute. Omitting the attribute is not available on any path. An empty
+ *     alt asserts that the image is decorative, so code using
+ *     '#theme' => 'neo_image_style' that holds a meaningful value should still
+ *     pass it rather than publish that claim.
  *   - title: The title text is displayed when the image is hovered in some
  *     popular browsers.
  *   - attributes: Associative array of additional attributes to be placed in
@@ -230,7 +224,7 @@ function template_preprocess_neo_image_style(&$variables) {
         $variables['image']['#access'] = FALSE;
 
         // Inform the site builders why their image didn't work.
-        \Drupal::logger('image')->warning('Could not apply @style image style to @uri because the style does not support it.', [
+        \Drupal::logger('neo_image')->warning('Could not apply @style image style to @uri because the style does not support it.', [
           // Fall back to the machine name: an image style's label can be NULL,
           // and a NULL placeholder value crashes FormattableMarkup (and with it
           // the dblog report view) when the log entry is later rendered.
