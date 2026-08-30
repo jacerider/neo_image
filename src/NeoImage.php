@@ -2,6 +2,7 @@
 
 namespace Drupal\neo_image;
 
+use Drupal\Core\Cache\CacheableMetadata;
 use Drupal\Core\Render\RenderableInterface;
 use Drupal\file\FileInterface;
 use Drupal\media\MediaInterface;
@@ -31,6 +32,22 @@ final class NeoImage implements RenderableInterface {
    * @var string|null
    */
   protected string|null $title;
+
+  /**
+   * The subject cacheability this image was built from.
+   *
+   * The factory is the only place the subject entity is in scope and the
+   * render array is built somewhere else entirely, so this carries the
+   * declaration between them. It holds the metadata and not the entity: an
+   * entity kept here would invite a second resolution later and give a render
+   * object a lifetime it should not have.
+   *
+   * An image built from a URI string leaves it empty, because a string names
+   * no entity and there is nothing to invalidate on.
+   *
+   * @var \Drupal\Core\Cache\CacheableMetadata
+   */
+  protected CacheableMetadata $cacheability;
 
   /**
    * An array of NeoImageStyles.
@@ -80,6 +97,7 @@ final class NeoImage implements RenderableInterface {
     $this->uri = $uri;
     $this->alt = $alt;
     $this->title = $title;
+    $this->cacheability = new CacheableMetadata();
     $this->styles['sm'] = new NeoImageStyle();
   }
 
@@ -97,6 +115,11 @@ final class NeoImage implements RenderableInterface {
    * reported as a missing file, which was a message about a lookup this method
    * never performed; a media with an empty source field and a valid thumbnail
    * renders that thumbnail instead.
+   *
+   * The object it answers carries the **subject cacheability** it was built
+   * from, which `toRenderable()` applies to the array it builds. That is the
+   * same declaration the **single-style render** makes for the same subject,
+   * so the two shapes cannot disagree about what a render of it depends on.
    *
    * @param \Drupal\media\MediaInterface|\Drupal\file\FileInterface $entity
    *   The media entity.
@@ -129,7 +152,14 @@ final class NeoImage implements RenderableInterface {
     if (!$file) {
       throw new \InvalidArgumentException('The entity does not resolve to a file.');
     }
-    return new static($file->getFileUri(), $alt, $title);
+    // Seeded after the guard and from the subject rather than the file: the
+    // alt and title come from the subject, the URI from the file, and the two
+    // go stale independently. The derivation never refuses, so it could be
+    // read earlier — but there is no object to carry it on until here, and the
+    // failure above answers nothing at all.
+    $image = new static($file->getFileUri(), $alt, $title);
+    $image->cacheability = NeoImageUtility::subjectCacheability($entity);
+    return $image;
   }
 
   /**
@@ -367,7 +397,9 @@ final class NeoImage implements RenderableInterface {
    *   The attributes.
    *
    * @return array
-   *   The renderable array.
+   *   The renderable array, carrying the **subject cacheability** the image
+   *   was built from, so a caller need not declare a dependency the render
+   *   already took. An image built from a URI string carries none.
    */
   public function toRenderable($alt = NULL, $title = NULL, $attributes = []):array {
     // The same rule as createFromEntity(): an empty supplied value means the
@@ -381,13 +413,19 @@ final class NeoImage implements RenderableInterface {
     if ($title === NULL || $title === '') {
       $title = $this->title ?? $title;
     }
-    return [
+    $build = [
       '#theme' => 'neo_image',
       '#neoImage' => $this,
       '#alt' => $alt,
       '#title' => $title,
       '#attributes' => $attributes,
     ];
+    // Applied rather than branched on: a URI-built image carries an empty
+    // metadata, and an empty one applies as no tags rather than as a special
+    // case. Tags without `#cache[keys]` create no cache entry, so this costs
+    // nothing per render and changes no markup.
+    $this->cacheability->applyTo($build);
+    return $build;
   }
 
 }

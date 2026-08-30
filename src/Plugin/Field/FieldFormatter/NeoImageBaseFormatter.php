@@ -191,7 +191,13 @@ class NeoImageBaseFormatter extends EntityReferenceFormatterBase {
         $elements[$delta]['#url'] = $url;
       }
 
-      // Add cacheability of each item in the field.
+      // Add cacheability of each item in the field. This is now a merge of
+      // something the render already declared — the factory attaches the
+      // subject cacheability, the subject entity's own metadata merged with
+      // its resolved file's. It stays anyway: deleting it would make this
+      // formatter's correctness depend on the factory having done the work,
+      // which is the coupling being removed in the other direction. The
+      // resolved file's tag is the half this line never declared and cannot.
       $this->renderer->addCacheableDependency($elements[$delta], $entity);
     }
 
