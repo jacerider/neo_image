@@ -48,8 +48,15 @@ use PHPUnit\Framework\Attributes\Group;
  *
  * **Why kernel and not unit.** The scan walks real stream wrappers and reads
  * real directories, so nothing here is pure. The absent handle is asserted by
- * counting stream resources either side of a scan, which is deterministic and
- * needs nothing installed.
+ * counting stream resources against a **baseline**: one full scan first, the
+ * count taken after it, then several further scans that may not push the count
+ * past it. Counting either side of a single scan and demanding equality would
+ * say *nothing was allocated* rather than *nothing leaked*, and a mechanism
+ * that opens one resource and holds it for the request leaks nothing at all. A
+ * leak is unbounded growth, and growth is what a baseline measures.
+ * `get_resources('stream')` stays the instrument: deterministic inside one
+ * process, needing nothing installed, and saying nothing about which function
+ * read the directory.
  */
 #[Group('neo_image')]
 final class StyleScanReadsOnceTest extends KernelTestBase {
@@ -151,45 +158,65 @@ final class StyleScanReadsOnceTest extends KernelTestBase {
   }
 
   /**
-   * A scan leaves the process holding no stream resource it did not have.
+   * Scanning again holds no more stream resources than the first scan did.
    *
-   * Acceptance criterion: it leaves the process holding no more stream
-   * resources after a scan than before it.
+   * Acceptance criterion: repeated scans hold no more stream resources than
+   * the first scan did.
    *
-   * This is the one criterion in the plan whose subject is the absence of
+   * This is the one criterion in the class whose subject is the absence of
    * something, so it is written as a count rather than as a claim about which
-   * function was called: `get_resources('stream')` either side of a scan is
-   * deterministic, needs nothing installed, and says nothing about how the
-   * directory was read — only that nothing was left open.
+   * function was called: `get_resources('stream')` is deterministic, needs
+   * nothing installed, and says nothing about how the directory was read.
    *
-   * The manager and the file system are fetched before the count so that a
-   * lazily built service cannot be mistaken for a leaked handle.
+   * **The baseline is taken after one full scan, not before it.** Before it,
+   * the first scan's own allocation is what the assertion measures, which is a
+   * claim about the mechanism rather than about a leak — an implementation
+   * that opened one resource and kept it for the request would fail while
+   * leaking nothing. After it, what is measured is growth, and growth is what
+   * the regression behind this criterion produced: `opendir()` with no
+   * matching `closedir()` left one handle per writable wrapper per listing, so
+   * every further scan pushed the count up again.
+   *
+   * **The repeats need managers of their own.** Both memos are per request, so
+   * calling twice on one manager reads nothing and would count the same
+   * absence three more times. Every one of them is kept alive to the end of
+   * the test, the way the container keeps the shared one alive to the end of
+   * the request: a handle held by a manager that has already been collected is
+   * not the leak this is looking for.
+   *
+   * The manager and the file system are fetched before the first scan so that
+   * a lazily built service cannot be mistaken for a leaked handle.
    */
-  public function testItLeavesNoStreamResourceOpenAfterTheScan(): void {
+  public function testRepeatedScansHoldNoMoreStreamResourcesThanTheFirst(): void {
     $this->makeStyleDirectory(self::SCALE_ID);
     $this->makeStyleDirectory(self::CROP_ID);
 
     $manager = $this->container->get('neo_image.style_manager');
     $this->container->get('file_system');
 
-    $before = count(get_resources('stream'));
     $names = $manager->getStyleNames();
-    $after = count(get_resources('stream'));
-
     $this->assertCount(2, $names, 'The scan really did read the directories it is being counted around.');
-    $this->assertSame(
-      $before,
-      $after,
-      'A listing holds no directory handle open for the rest of the request.'
-    );
 
-    // A second manager scans again; the count still may not grow.
-    $this->freshManager()->getStyles();
-    $this->assertCount(
-      $before,
-      get_resources('stream'),
-      'Nor does the scan behind the parsed styles.'
-    );
+    $baseline = count(get_resources('stream'));
+
+    $managers = [];
+    for ($repeat = 1; $repeat <= 3; $repeat++) {
+      $managers[] = $manager = $this->freshManager();
+      $styles = $manager->getStyles();
+
+      $this->assertCount(
+        2,
+        $styles,
+        sprintf('Scan %d really did read the directories too.', $repeat)
+      );
+      $this->assertLessThanOrEqual(
+        $baseline,
+        count(get_resources('stream')),
+        sprintf('Scan %d left the process holding no more than the first one did.', $repeat)
+      );
+    }
+
+    $this->assertCount(3, $managers, 'Three further scans ran, each on a manager of its own.');
   }
 
   /**
