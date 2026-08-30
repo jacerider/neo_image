@@ -642,12 +642,7 @@ class NeoImageStyle {
         'data' => $data,
       ]);
     }
-    $image_style->addImageEffect([
-      'id' => $this->getConversionEffectId(),
-      'data' => [
-        'extension' => 'webp',
-      ],
-    ]);
+    $image_style->addImageEffect(static::getConversionEffect());
     $this->builtStyleId = $id;
     $this->builtStyle = $image_style;
     return $image_style;
@@ -664,11 +659,82 @@ class NeoImageStyle {
    * own declared core range, which is a release-visible claim about what thirty
    * sites may run and not part of a memoisation change.
    *
+   * Static because a **directory style** needs it too and is built from a name
+   * rather than from an instance's parameters. Nothing about *when* it is
+   * resolved changes: the value comes from a compile-time constant and was
+   * already remembered per process rather than per object.
+   *
    * @return string
    *   The image effect plugin id.
    */
-  protected function getConversionEffectId():string {
+  protected static function getConversionEffectId():string {
     return static::$conversionEffectId ??= version_compare(\Drupal::VERSION, '11.2.0', '>=') ? 'image_convert_avif' : 'image_convert';
+  }
+
+  /**
+   * Get the **format conversion** effect, as both builders declare it.
+   *
+   * One declaration, read by the **built style** and by the **directory
+   * style**. The plugin id is half of what decides a derivative's extension and
+   * the configured `extension` is the other half, so a second copy of either
+   * one drifts into the failure this module is least able to see: a uri that
+   * matches nothing on disk, whose flush deletes nothing and reports success.
+   *
+   * The declaration is shared and the assembly is not. `getImageStyle()`
+   * appends this **last**, after the parameter effects, because effect order is
+   * render order; a directory style has no parameter effects to come after,
+   * because those are exactly the part core's derivative-uri arithmetic never
+   * reads.
+   *
+   * @return array
+   *   The effect, in the shape `addImageEffect()` takes.
+   */
+  protected static function getConversionEffect():array {
+    return [
+      'id' => static::getConversionEffectId(),
+      'data' => [
+        'extension' => 'webp',
+      ],
+    ];
+  }
+
+  /**
+   * Build the **directory style** for a **derivative directory** name.
+   *
+   * An unsaved `ImageStyle` that stands for a directory rather than for a set
+   * of parameters: it carries the directory's name and the **format
+   * conversion**, and no other effect. It is the **identity style**'s **built
+   * style** wearing the directory's name, and it is never rendered.
+   *
+   * Those two things are all core's `buildUri()` reads off a style — the id,
+   * which becomes the directory segment, and the extension the effects produce,
+   * which decides whether a suffix is appended to the source path. Every neo
+   * style ends in the **format conversion** and every other effect passes the
+   * extension through untouched, so both answers are available for any neo
+   * directory on disk from its name alone.
+   *
+   * The parameter effects are precisely the part `buildUri()` never asks about,
+   * which is why dropping them costs nothing — and why this exists for a name
+   * holding a **rejected id**, where a **built style** cannot. Nothing here
+   * consults the **codec**: addressing a directory this module wrote is not a
+   * reading of its name. See ADR 0015.
+   *
+   * Static because it is built from a name and not from an instance's
+   * parameters, and it memoises nothing: `NeoImageStyleManager` keeps the list
+   * for the request, which is where the caller that asks repeatedly lives.
+   *
+   * @param string $name
+   *   The **derivative directory** name, parseable or not.
+   *
+   * @return \Drupal\image\ImageStyleInterface
+   *   The directory style.
+   */
+  public static function buildDirectoryStyle(string $name):ImageStyleInterface {
+    $image_style = ImageStyle::create([
+      'name' => $name,
+    ]);
+    $image_style->addImageEffect(static::getConversionEffect());
+    return $image_style;
   }
 
   /**

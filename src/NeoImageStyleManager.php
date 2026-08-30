@@ -37,6 +37,20 @@ final class NeoImageStyleManager {
   protected array $styleNames;
 
   /**
+   * One **directory style** per name the **style scan** listed, keyed by name.
+   *
+   * Memoised beside the other two, and for the same reason: it is derived from
+   * a directory listing taken once per request, so it needs no invalidation.
+   * The memo is not decoration. Core invokes the **per-file flush** once per
+   * *configured* image style, so one file move runs it once per configured
+   * style, and an unmemoised list would rebuild an unsaved config entity per
+   * **derivative directory** on every one of them.
+   *
+   * @var \Drupal\image\ImageStyleInterface[]
+   */
+  protected array $directoryStyles;
+
+  /**
    * Constructs a NeoImageStyleManager object.
    */
   public function __construct(
@@ -139,6 +153,39 @@ final class NeoImageStyleManager {
       $this->styleNames = array_values($names);
     }
     return $this->styleNames;
+  }
+
+  /**
+   * Get one **directory style** per **derivative directory** on disk.
+   *
+   * A directory style carries a directory's name and the **format conversion**
+   * and no other effect, which is all core's `buildUri()` reads off a style. It
+   * is what addresses a derivative *inside* a directory, where the **style
+   * flush** needs only the directory itself.
+   *
+   * The list is **uniform**: every name the **style scan** listed gets one,
+   * whether or not the **codec** can parse it. That is the difference between
+   * this and `getStyles()`, and it is the point — a directory holding a
+   * **rejected id** is still a directory this module wrote, so what runs on
+   * every file move must be able to address it. A parsed-where-possible list
+   * would put the codec, its throw and its warning back on that path to produce
+   * a list whose two halves behave identically anyway. See ADR 0015.
+   *
+   * Memoised for the request, and derived from the **style scan**'s names, so a
+   * caller asking for styles and a caller asking for directory styles cost one
+   * directory read between them however they are ordered.
+   *
+   * @return \Drupal\image\ImageStyleInterface[]
+   *   The directory styles, keyed by the directory name each carries.
+   */
+  public function getDirectoryStyles(): array {
+    if (!isset($this->directoryStyles)) {
+      $this->directoryStyles = [];
+      foreach ($this->getStyleNames() as $filename) {
+        $this->directoryStyles[$filename] = NeoImageStyle::buildDirectoryStyle($filename);
+      }
+    }
+    return $this->directoryStyles;
   }
 
   /**
