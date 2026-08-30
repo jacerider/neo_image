@@ -21,6 +21,17 @@ use Psr\Log\LoggerInterface;
 
 /**
  * Plugin implementation of the 'neo_image_image' formatter.
+ *
+ * This class is a base a site may extend. Overriding create() is the ordinary
+ * reason to extend a formatter — a subclass that wants a service of its own
+ * writes its own factory — and that factory calls new static() with the
+ * argument list it was written against. The count is fixed at the subclass's
+ * compile time and cannot be corrected from here.
+ *
+ * So a service argument added to this constructor after a release is added
+ * optionally: last in the list, defaulted to NULL, and resolved by name when it
+ * is absent, behind a deprecation naming the major it becomes required in.
+ * See ADR 0016.
  */
 class NeoImageBaseFormatter extends EntityReferenceFormatterBase {
 
@@ -60,12 +71,24 @@ class NeoImageBaseFormatter extends EntityReferenceFormatterBase {
    *   Any third party settings.
    * @param \Drupal\Core\Render\RendererInterface $renderer
    *   The renderer service.
-   * @param \Psr\Log\LoggerInterface $logger
-   *   The logger channel named for this module.
+   * @param \Psr\Log\LoggerInterface|null $logger
+   *   (optional) The logger channel named for this module. When it is absent
+   *   the same channel is resolved by name, and a deprecation is announced.
    */
-  public function __construct($plugin_id, $plugin_definition, FieldDefinitionInterface $field_definition, array $settings, $label, $view_mode, array $third_party_settings, RendererInterface $renderer, LoggerInterface $logger) {
+  public function __construct($plugin_id, $plugin_definition, FieldDefinitionInterface $field_definition, array $settings, $label, $view_mode, array $third_party_settings, RendererInterface $renderer, ?LoggerInterface $logger = NULL) {
     parent::__construct($plugin_id, $plugin_definition, $field_definition, $settings, $label, $view_mode, $third_party_settings);
     $this->renderer = $renderer;
+    if ($logger === NULL) {
+      // Issues for this package live on GitHub, not drupal.org.
+      // phpcs:ignore Drupal.Semantics.FunctionTriggerError.TriggerErrorSeeUrlFormat
+      @trigger_error('Calling ' . __METHOD__ . '() without the $logger argument is deprecated in neo_image:1.1.0 and it will be required in neo_image:2.0.0. See https://github.com/jacerider/neo_image/issues/14', E_USER_DEPRECATED);
+      // The one channel this class cannot inject, because the argument that
+      // would have carried it is the argument the caller did not pass. It is
+      // resolved by name, which answers the same channel as the injected
+      // service; the container path never reaches this line.
+      // phpcs:ignore DrupalPractice.Objects.GlobalDrupal.GlobalDrupal
+      $logger = \Drupal::logger('neo_image');
+    }
     $this->logger = $logger;
   }
 
