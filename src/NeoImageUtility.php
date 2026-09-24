@@ -267,4 +267,78 @@ abstract class NeoImageUtility {
     throw new \InvalidArgumentException("Invalid anchor '{$anchor}' provided to getKeywordOffset()");
   }
 
+  /**
+   * Reads an SVG's intrinsic dimensions from its root element.
+   *
+   * No image toolkit core ships can read an SVG, so the image field stores no
+   * width or height for one and every size computed from those is empty. An
+   * `<img>` of an SVG with no size of its own then has nothing to lay out
+   * with, and in a shrink-to-fit container it collapses to nothing.
+   *
+   * Absolute `width` and `height` attributes (unitless or `px`) win. A
+   * relative one (`100%`, `em`) says nothing about the image's own size, so
+   * the `viewBox` supplies what is missing, keeping its aspect ratio.
+   *
+   * @param string $uri
+   *   The SVG's URI or path.
+   *
+   * @return array
+   *   Associative array, empty when the size cannot be read.
+   *   - width: Integer with the SVG's width.
+   *   - height: Integer with the SVG's height.
+   */
+  public static function svgDimensions(string $uri): array {
+    $contents = @file_get_contents($uri);
+    if (!$contents) {
+      return [];
+    }
+    $errors = libxml_use_internal_errors(TRUE);
+    $svg = simplexml_load_string($contents, NULL, LIBXML_NONET);
+    libxml_clear_errors();
+    libxml_use_internal_errors($errors);
+    if (!$svg instanceof \SimpleXMLElement) {
+      return [];
+    }
+    $attributes = $svg->attributes();
+    $width = static::svgLength((string) ($attributes['width'] ?? ''));
+    $height = static::svgLength((string) ($attributes['height'] ?? ''));
+    if ($width && $height) {
+      return ['width' => $width, 'height' => $height];
+    }
+    $viewBox = trim((string) ($attributes['viewBox'] ?? ''));
+    $box = preg_split('/[\s,]+/', $viewBox);
+    if (count($box) !== 4 || !is_numeric($box[2]) || !is_numeric($box[3])
+      || $box[2] <= 0 || $box[3] <= 0) {
+      return [];
+    }
+    $ratio = $box[3] / $box[2];
+    if ($width) {
+      return ['width' => $width, 'height' => (int) round($width * $ratio)];
+    }
+    if ($height) {
+      return ['width' => (int) round($height / $ratio), 'height' => $height];
+    }
+    return [
+      'width' => (int) round((float) $box[2]),
+      'height' => (int) round((float) $box[3]),
+    ];
+  }
+
+  /**
+   * Parses an absolute SVG length, unitless or in `px`.
+   *
+   * @param string $length
+   *   The attribute value.
+   *
+   * @return int|null
+   *   The rounded length, or NULL when it is relative, zero or not a length.
+   */
+  protected static function svgLength(string $length): ?int {
+    if (!preg_match('/^\s*(\d+(?:\.\d+)?)\s*(?:px)?\s*$/', $length, $match)) {
+      return NULL;
+    }
+    $value = (int) round((float) $match[1]);
+    return $value > 0 ? $value : NULL;
+  }
+
 }

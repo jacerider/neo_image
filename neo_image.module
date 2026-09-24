@@ -7,8 +7,10 @@
 
 use Drupal\Core\StreamWrapper\StreamWrapperInterface;
 use Drupal\Core\Template\Attribute;
+use Drupal\image\Entity\ImageStyle;
 use Drupal\neo_image\NeoImage;
 use Drupal\neo_image\NeoImageStyle;
+use Drupal\neo_image\NeoImageUtility;
 use Drupal\neo_image\Service\AnimatedGif;
 
 /**
@@ -252,6 +254,41 @@ function template_preprocess_neo_image_style(&$variables) {
     $variables['image']['#title'] = $variables['title'];
   }
 
+}
+
+/**
+ * Implements hook_preprocess_HOOK() for image_style.
+ *
+ * Gives a core image style's SVG the size the style would give it. Core emits
+ * an SVG as-is, at "the dimensions specified by the style", but it computes
+ * those from the image field's stored width and height, and a field stores
+ * none for an SVG because no toolkit can read one. The `<img>` then carries
+ * no size, and an SVG sized only by its `viewBox` collapses to nothing in a
+ * shrink-to-fit container: the media library's upload preview showed an
+ * empty space where the logo should be. The SVG's own dimensions are read
+ * here and run through the style, so a 400x120 logo under a 220x220 scale
+ * renders at 220x66.
+ *
+ * Whether the SVG is shown at all is not decided here. Core hides a source
+ * its toolkit cannot style, and svg_image is what shows it again.
+ */
+function neo_image_preprocess_image_style(&$variables) {
+  $uri = $variables['uri'] ?? '';
+  if (!empty($variables['image']['#width'])
+    || !empty($variables['image']['#height'])
+    || !NeoImageStyle::isSvgUri($uri)) {
+    return;
+  }
+  $dimensions = NeoImageUtility::svgDimensions($uri);
+  if (!$dimensions) {
+    return;
+  }
+  $style = ImageStyle::load($variables['style_name'] ?? '');
+  if ($style) {
+    $style->transformDimensions($dimensions, $uri);
+  }
+  $variables['image']['#width'] = $dimensions['width'];
+  $variables['image']['#height'] = $dimensions['height'];
 }
 
 /**
