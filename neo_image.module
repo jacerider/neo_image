@@ -137,7 +137,7 @@ function template_preprocess_neo_image_style(&$variables) {
   $uri = NeoImageStyle::rewritePublicPath($variables['uri'] ?? '');
 
   $animatedGif = new AnimatedGif();
-  $isSvg = (bool) preg_match('/\.svg(?:[?#].*)?$/i', $uri);
+  $isSvg = NeoImageStyle::isSvgUri($uri);
   if (NeoImageStyle::isExternalUri($uri) || $animatedGif->isAnAnimatedGif($uri) || $isSvg) {
     // The source can't be turned into a styled derivative: it's an external
     // URL, an animated GIF, or a vector SVG. Emit the original file as-is.

@@ -33,8 +33,9 @@ invalid one. _Avoid:_ "default alt", "empty alt", "alt fallback".
 
 **Unstyleable source** — a URI no derivative can be built from: an external URL, an animated GIF, or
 an SVG. A **single-style render** emits it as-is at the dimensions its style declares, because there
-is no local raster for the toolkit to measure. _Avoid:_ "external image", "raw image", "the
-passthrough".
+is no local raster for the toolkit to measure. The URL **entry points** answer an SVG's own file URL
+rather than a style URL no toolkit can fill; an external URL still comes back unchanged, and an
+animated GIF is still styled. _Avoid:_ "external image", "raw image", "the passthrough".
 
 **Public-path rewrite** — the step that turns a public-files web path into a stream URI before
 anything else looks at it, reading the site's configured public files path rather than assuming the

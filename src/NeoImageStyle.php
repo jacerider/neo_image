@@ -1114,6 +1114,23 @@ class NeoImageStyle {
   }
 
   /**
+   * Check if URI names an SVG, the vector **unstyleable source**.
+   *
+   * No image toolkit core ships can read an SVG, so a derivative of one is
+   * never built and a style URL for one never resolves. The render and URL
+   * **entry points** both ask this, and emit the original file instead.
+   *
+   * @param string $uri
+   *   The URI, stream or web path, with or without a query or fragment.
+   *
+   * @return bool
+   *   TRUE when the path ends in `.svg`, compared case-insensitively.
+   */
+  public static function isSvgUri(string $uri):bool {
+    return (bool) preg_match('/\.svg(?:[?#].*)?$/i', $uri);
+  }
+
+  /**
    * The **public-path rewrite**: a public-files web path becomes a stream URI.
    *
    * It lives beside `isExternalUri()` because it is that predicate's input
@@ -1249,12 +1266,17 @@ class NeoImageStyle {
    *   The URL of the image after applying the image style. A URI this module
    *   calls external — which is every URI that is not on the public stream,
    *   `private://` included — is answered unchanged. That is why this is not
-   *   the method `toUrlFromEntity()` delegates to; see `docs/adr/0011`.
+   *   the method `toUrlFromEntity()` delegates to; see `docs/adr/0011`. A
+   *   public SVG answers its own file URL, since no style can derive it.
    */
   public function toUrlFromUri(string $uri, bool $ensure = FALSE):string {
     $uri = self::rewritePublicPath($uri);
     if (self::isExternalUri($uri)) {
       return $uri;
+    }
+    if (self::isSvgUri($uri)) {
+      return \Drupal::service('file_url_generator')
+        ->generateAbsoluteString($uri);
     }
     $style = $this->getImageStyle();
     if ($ensure) {
@@ -1320,7 +1342,8 @@ class NeoImageStyle {
    *   The generated URL for the image style, or `'#'` when the entity resolves
    *   to no file — the **failure contract** of a URL **entry point**, which
    *   throws nothing. A caller that wants to know it happened asks
-   *   `NeoImageUtility::resolvedFile()` first.
+   *   `NeoImageUtility::resolvedFile()` first. An SVG answers its own file
+   *   URL, on any stream, since no style can derive it.
    */
   public function toUrlFromEntity(MediaInterface|FileInterface $entity, $ensure = FALSE):string {
     $file = NeoImageUtility::resolvedFile($entity);
@@ -1328,6 +1351,10 @@ class NeoImageStyle {
       return '#';
     }
     $uri = $file->getFileUri();
+    if (self::isSvgUri($uri)) {
+      return \Drupal::service('file_url_generator')
+        ->generateAbsoluteString($uri);
+    }
     $style = $this->getImageStyle();
     if ($ensure) {
       $this->ensureDerivative($style, $uri);
