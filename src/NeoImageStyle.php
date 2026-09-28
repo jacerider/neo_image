@@ -1155,6 +1155,14 @@ class NeoImageStyle {
    * here would change what a caller receives, and break the constraint this
    * ships on: a site running the default public path sees no difference at all.
    *
+   * The file path it lifts out is decoded. A web path is encoded, because a
+   * component's `src` is `createFileUrl()` and core runs that through
+   * `UrlHelper::encodePath()`; a stream URI is not. Left encoded, a filename
+   * carrying `#`, `+` or a space names a file that does not exist, and
+   * `buildUrl()` encodes it a second time into a derivative URL that 404s.
+   * `rawurldecode()` is the exact inverse of core's encoder; `urldecode()` is
+   * not, because it turns a literal `+` into a space.
+   *
    * @param string $uri
    *   The URI or path. A caller whose source may be absent coalesces to the
    *   empty string rather than passing NULL: the parameter is a plain string
@@ -1166,7 +1174,13 @@ class NeoImageStyle {
    *   outside the public files directory all come back as they went in.
    */
   public static function rewritePublicPath(string $uri):string {
-    return str_replace('/' . PublicStream::basePath() . '/', 'public://', $uri);
+    $base = '/' . PublicStream::basePath() . '/';
+    $position = strpos($uri, $base);
+    if ($position === FALSE) {
+      return $uri;
+    }
+    $path = substr($uri, $position + strlen($base));
+    return substr($uri, 0, $position) . 'public://' . rawurldecode($path);
   }
 
   /**

@@ -115,6 +115,42 @@ final class PublicPathRewriteTest extends KernelTestBase {
   }
 
   /**
+   * It decodes the file path it lifts out of an encoded web path.
+   *
+   * Acceptance criterion: it rewrites a public-files web path whose filename
+   * carries `#`, `+` or a space to the stream uri of the file it names.
+   *
+   * A component's image `src` is `createFileUrl()`, which core encodes with
+   * `UrlHelper::encodePath()`. Left encoded, the lifted path names a file that
+   * does not exist, and `buildUrl()` encodes it a second time: the derivative
+   * url carries `%2523` for a `#`, and the derivative controller answers 404
+   * for a missing source. `+` is in the filename because it is the character
+   * `urldecode()` gets wrong, and `rawurldecode()` is the exact inverse of
+   * core's encoder.
+   */
+  public function testEncodedWebPathBecomesTheStreamUriOfTheFileItNames(): void {
+    $uri = 'public://image-test #1+kit.png';
+    $this->container->get('file_system')->copy(
+      $this->root . '/core/tests/fixtures/files/image-test.png',
+      $uri,
+      FileExists::Replace
+    );
+    $web_path = $this->container->get('file_url_generator')->generateString($uri);
+
+    $this->assertStringContainsString('%23', $web_path, 'The fixture web path is encoded, as a component src is.');
+    $this->assertSame(
+      $uri,
+      NeoImageStyle::rewritePublicPath($web_path),
+      'An encoded public-files web path becomes the stream uri of the file it names.'
+    );
+
+    $expected = (new NeoImageStyle(['scale' => [100]]))->getImageStyle()->buildUrl($uri);
+    $url = TwigExtension::renderImageStyleUrl($web_path, ['scale' => [100]]);
+    $this->assertSame($expected, $url, 'The Twig function answers the derivative url of that file.');
+    $this->assertStringNotContainsString('%25', $url, 'Encoded once, not twice.');
+  }
+
+  /**
    * It hands back everything that is not a public-files web path.
    *
    * Acceptance criterion: it returns a stream uri, an absolute external url,
