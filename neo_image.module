@@ -9,6 +9,7 @@ use Drupal\Core\StreamWrapper\StreamWrapperInterface;
 use Drupal\Core\Template\Attribute;
 use Drupal\image\Entity\ImageStyle;
 use Drupal\neo_image\NeoImage;
+use Drupal\neo_image\NeoImagePriority;
 use Drupal\neo_image\NeoImageStyle;
 use Drupal\neo_image\NeoImageUtility;
 use Drupal\neo_image\Service\AnimatedGif;
@@ -25,6 +26,8 @@ function neo_image_theme() {
         'title' => NULL,
         'attributes' => [],
         'url' => NULL,
+        // TRUE, FALSE or NULL: see NeoImagePriority::claim().
+        'priority' => NULL,
       ],
     ],
     // Theme functions in image.module.
@@ -36,6 +39,11 @@ function neo_image_theme() {
         'title' => NULL,
         'attributes' => [],
         'url' => NULL,
+        // TRUE, FALSE or NULL: see NeoImagePriority::claim().
+        'priority' => NULL,
+        // The media query this image's preload carries. Set by the responsive
+        // render for its controlling image; NULL preloads on every viewport.
+        'preload_media' => NULL,
       ],
     ],
   ];
@@ -62,11 +70,23 @@ function neo_image_theme() {
  *     popular browsers.
  *   - attributes: Associative array of additional attributes to be placed in
  *     the img tag.
+ *   - priority: TRUE gives the image **priority**: its `<img>` loads eagerly
+ *     at high fetch priority, and the page head preloads the one image each
+ *     viewport paints — a preload per `<source>` and one for the controlling
+ *     image, each limited to the viewports where that image wins. FALSE
+ *     declines it, NULL claims an outstanding **priority grant**. See
+ *     NeoImagePriority.
  */
 function template_preprocess_neo_image(&$variables) {
   $neoImage = $variables['neoImage'];
   $sources = [];
   if ($neoImage instanceof NeoImage) {
+    // Resolved before the controlling image is built, and handed to it as
+    // TRUE or FALSE rather than left NULL: the controlling image is a render
+    // of its own, and a NULL there would let it claim a grant this picture
+    // declined, or claim a second time.
+    $priority = \Drupal::service('neo_image.priority')->claim($variables['priority'] ?? NULL);
+    $preloadMedia = $priority ? $neoImage->getPreloadMediaQueries() : [];
     $uri = $neoImage->getUri();
     /** @var \Drupal\Core\Image\Image $image */
     $image = \Drupal::service('image.factory')->get($uri);
@@ -85,6 +105,10 @@ function template_preprocess_neo_image(&$variables) {
     foreach ($neoImageStyles as $size => $neoImageStyle) {
       if ($size === $lastSize) {
         $variables['img_element'] = $neoImageStyle->toRenderableFromUri($uri, $variables['alt'], $variables['title'], $outputImageTag ? $variables['attributes'] : []);
+        $variables['img_element']['#priority'] = $priority;
+        if ($priority) {
+          $variables['img_element']['#preload_media'] = $preloadMedia[$size] ?? NULL;
+        }
       }
       else {
         $imageStyle = $neoImageStyle->getImageStyle();
@@ -102,6 +126,14 @@ function template_preprocess_neo_image(&$variables) {
         $attribute->setAttribute('height', $dimensions['height']);
 
         $sources[$size] = $attribute;
+
+        if ($priority) {
+          // The srcset this source emits is a single URL with no descriptor,
+          // so the preload's href is that URL verbatim rather than an
+          // imagesrcset: the same fetch, and one every browser that preloads
+          // at all understands.
+          $variables['#attached']['html_head'][] = NeoImagePriority::preloadLink($imageUri, $preloadMedia[$size] ?? NULL, $type);
+        }
       }
     }
   }
@@ -129,6 +161,13 @@ function template_preprocess_neo_image(&$variables) {
  *     popular browsers.
  *   - attributes: Associative array of additional attributes to be placed in
  *     the img tag.
+ *   - priority: TRUE gives the image **priority**: its `<img>` loads eagerly
+ *     at high fetch priority, and the page head preloads the URL it paints.
+ *     FALSE declines it, NULL claims an outstanding **priority grant**. An
+ *     image that will not render claims nothing. See NeoImagePriority.
+ *   - preload_media: The media query that preload is limited to. The
+ *     responsive render sets it for its controlling image; NULL preloads on
+ *     every viewport.
  */
 function template_preprocess_neo_image_style(&$variables) {
   /** @var \Drupal\neo_image\NeoImageStyle $neoImageStyle */
@@ -252,6 +291,21 @@ function template_preprocess_neo_image_style(&$variables) {
   // neither adding it nor removing it earns the markup diff.
   if (\array_key_exists('title', $variables)) {
     $variables['image']['#title'] = $variables['title'];
+  }
+
+  // Priority, last, so it reads the image exactly as it will render. An image
+  // hidden above renders nothing and so claims nothing: a grant it took would
+  // be spent on no image at all.
+  if (($variables['image']['#access'] ?? TRUE) !== FALSE
+    && \Drupal::service('neo_image.priority')->claim($variables['priority'] ?? NULL)) {
+    foreach (NeoImagePriority::IMAGE_ATTRIBUTES as $name => $value) {
+      $variables['image']['#attributes'][$name] = $value;
+    }
+    // The href is generated by the call core's image preprocess makes for
+    // `src`, from the same value, so the preload and the `<img>` cannot name
+    // two URLs for one image.
+    $href = \Drupal::service('file_url_generator')->generateString($variables['image']['#uri']);
+    $variables['#attached']['html_head'][] = NeoImagePriority::preloadLink($href, $variables['preload_media'] ?? NULL);
   }
 
 }

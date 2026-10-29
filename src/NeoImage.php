@@ -65,28 +65,37 @@ final class NeoImage implements RenderableInterface {
   /**
    * Hardcoded breakpoints.
    *
+   * `mediaQuery` is what a `<source>` carries. `minWidth` is the same
+   * boundary as a bare length, which the **exclusive media** a preload needs
+   * are built from; the smallest breakpoint has none.
+   *
    * @var array
    */
   protected static array $breakpoints = [
     'sm' => [
       'label' => 'Default',
       'mediaQuery' => 'all',
+      'minWidth' => NULL,
     ],
     'md' => [
       'label' => 'Medium',
       'mediaQuery' => '(width >= 48rem)',
+      'minWidth' => '48rem',
     ],
     'lg' => [
       'label' => 'Large',
       'mediaQuery' => '(width >= 64rem)',
+      'minWidth' => '64rem',
     ],
     'xl' => [
       'label' => 'Extra Large',
       'mediaQuery' => '(width >= 80rem)',
+      'minWidth' => '80rem',
     ],
     '2xl' => [
       'label' => '2x Large',
       'mediaQuery' => '(width >= 96rem)',
+      'minWidth' => '96rem',
     ],
   ];
 
@@ -190,6 +199,47 @@ final class NeoImage implements RenderableInterface {
    */
   public function getMediaQuery($size):string {
     return $this->getBreakpoints()[$size]['mediaQuery'];
+  }
+
+  /**
+   * Gets the **exclusive media** a priority render's preload links carry.
+   *
+   * A `<picture>` paints its first `<source>` whose media matches, and its
+   * `<img>` only when none does; the sources' own queries overlap — at 90rem
+   * both `(width >= 48rem)` and `(width >= 80rem)` match — and the picture
+   * settles that by order. Preload links have no order: every link whose
+   * media matches downloads. Copying the sources' queries onto the preloads
+   * would download one image per breakpoint below the viewport, plus the
+   * fallback, and paint one of them. So each style's query is bounded above
+   * by the next larger style present, and the controlling image's has no
+   * lower bound at all, because it paints wherever no source matches.
+   *
+   * The lower bound is the source's own query, verbatim, and the upper bound
+   * is its exact complement, so the set covers every viewport once and each
+   * preload matches exactly where its style paints.
+   *
+   * @return array<string, string|null>
+   *   One query per style present, keyed by breakpoint, smallest first — the
+   *   first is the controlling image's. NULL when a single style is present,
+   *   because it paints on every viewport.
+   *
+   * @see docs/adr/0017-a-preload-carries-exclusive-media-not-its-sources-media.md
+   */
+  public function getPreloadMediaQueries():array {
+    $sizes = array_keys($this->getStyles());
+    $queries = [];
+    foreach ($sizes as $index => $size) {
+      $conditions = [];
+      if ($index > 0) {
+        $conditions[] = $this->getMediaQuery($size);
+      }
+      $next = $sizes[$index + 1] ?? NULL;
+      if ($next !== NULL) {
+        $conditions[] = '(width < ' . self::$breakpoints[$next]['minWidth'] . ')';
+      }
+      $queries[$size] = $conditions ? implode(' and ', $conditions) : NULL;
+    }
+    return $queries;
   }
 
   /**

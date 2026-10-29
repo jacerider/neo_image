@@ -21,3 +21,5 @@ services:
     class: Drupal\neo_image\TwigExtension
     tags:
       - { name: twig.extension, priority: 100 }
+  neo_image.priority:
+    class: Drupal\neo_image\NeoImagePriority

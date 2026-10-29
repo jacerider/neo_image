@@ -5,6 +5,7 @@ CONTENTS OF THIS FILE
  * Requirements
  * Installation
  * Twig
+ * Priority (LCP images)
  * Responsive Image Generator
  * Image Style Generator
  * Image Style Naming Conventions
@@ -72,6 +73,61 @@ There are 3 twig helpers available:
 {{ neo_image(entity, {sm: {op: 'exact', width: 100, height: 100}, md: {op: 'exact', width: 200, height: 200}}, alt) }}
 
 ```
+
+
+PRIORITY (LCP IMAGES)
+---------------------
+
+Give the image most likely to be the page's largest contentful paint -- a hero,
+the first image above the fold -- the `priority` option. It goes beside the
+dimensions in either options shape, and either Twig function takes it:
+
+```twig
+{{ neo_image(src, {sm: {op: 'scaleCrop', width: 412, height: 300}, lg: {op: 'scale', width: 1600}, priority: true}, alt) }}
+{{ neo_image_style(src, {scale: {width: 1200}, priority: true}, alt) }}
+```
+
+With `priority: true`:
+
+- the `<img>` gets `loading="eager"`, `fetchpriority="high"` and
+  `decoding="async"`, replacing any `loading` the caller passed;
+- the page head gets a `<link rel="preload" as="image" fetchpriority="high">`
+  for each image the render can paint: one per `<source>` of a `<picture>`
+  plus one for its `<img>`, each limited by `media` to the viewports where
+  that image is the one painted. Each viewport matches exactly one, so the
+  browser downloads one image, early, and it is the image it then paints.
+
+The links are attached (`#attached['html_head']`), not printed, so they come
+back with a render-cached copy of whatever contains the image. Leave the option
+out -- or pass `priority: false` -- and the output is what it always was. Use
+it on one image per page: every priority image competes for the same early
+bandwidth.
+
+From PHP, set `#priority` on the render array either render builds:
+
+```php
+$build = $neoImage->toRenderable('Alt text');
+$build['#priority'] = TRUE;
+```
+
+### Granting priority without editing a template
+
+Code that knows which part of a page comes first, but not which image inside it
+renders first, can grant priority instead. The first neo_image render after the
+grant takes it, unless that render passed `priority: false`, which leaves the
+grant for the next image:
+
+```php
+$priority = \Drupal::service('neo_image.priority');
+$priority->grant();
+// ... render the part of the page that comes first ...
+$priority->withdraw();
+```
+
+Always withdraw once that part has rendered, so an unclaimed grant cannot reach
+an image further down the page. A render served from the render cache claims
+nothing, so decide where to grant from something the cache cannot skip, and make
+the containing cache entry vary on that decision.
 
 
 RESPONSIVE IMAGE GENERATOR

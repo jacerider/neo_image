@@ -222,3 +222,20 @@ image's URL to the largest dimensions the options ask for, so an example image p
 the component will really render. It reads an options array of either shape and leaves every other
 URI untouched. _Avoid:_ "placeholder resize", "the placehold.co hack".
 
+**Priority** — the mark of the image a render expects to be the page's largest contentful paint: its
+`<img>` loads eagerly at high fetch priority, and the page head preloads the image each viewport
+paints. Asked for with the `priority` option of either Twig render function, or `#priority` on
+either render's array; it never decides the **render dispatch**'s shape. Without it a render is
+byte-identical to one that never heard of it. _Avoid:_ "LCP flag", "eager image", "hero mode".
+
+**Priority grant** — a standing offer of **priority** to the next neo_image render that does not
+decline it, made by code that knows which part of a page comes first but not which image inside it
+renders first. Claimed at most once, through the theme layer, so it reaches a formatter's image as
+well as a template's; withdrawn by whoever made it once that part has rendered. A render served from
+the render cache claims nothing. _Avoid:_ "priority token", "the auto flag", "priority context".
+
+**Exclusive media** — the media queries a **priority** render's preload links carry: one per image
+the render can paint, each true exactly where that image is the one painted, so every viewport
+matches one. Built from the styles present, never copied from the `<source>` elements, whose queries
+overlap and are settled by order — which preloads do not have. See ADR 0017. _Avoid:_ "preload
+media", "the source media", "breakpoint ranges".

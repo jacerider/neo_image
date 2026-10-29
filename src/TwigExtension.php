@@ -136,7 +136,10 @@ class TwigExtension extends AbstractExtension {
    *   The image options. An array is read two ways: keyed by effect —
    *   `width`, `height`, `crop` and the rest the style setters name — it is a
    *   single-style render, and keyed `sm`, `md`, `lg`, `xl` or `2xl`, each
-   *   holding its own effect-keyed array, it is a responsive render. The type
+   *   holding its own effect-keyed array, it is a responsive render. Either
+   *   shape may also hold `priority`, which is lifted out before the shape is
+   *   chosen and becomes the render's `#priority`; it never decides the
+   *   shape. The type
    *   is `mixed` because a non-array really is accepted and really is ignored:
    *   it is replaced with an empty array below. Documenting it as an array
    *   would make that guard a phpstan finding, and deleting the guard is a
@@ -162,6 +165,10 @@ class TwigExtension extends AbstractExtension {
    * @see \Drupal\Tests\neo_image\Kernel\RenderDispatchEquivalenceTest
    */
   protected static function renderDispatch($mixed, $options = [], $alt = '', $title = '', $attributes = []) {
+    // Lifted out before anything else reads the options: it is a fact about
+    // the render, not a dimension, so neither the placeholder swap nor either
+    // shape should ever see it.
+    $priority = static::priorityOption($options);
     $mixed = static::placeholderSwap($mixed, $options);
     if (!is_array($options)) {
       // If options is not an array, ignore it.
@@ -171,9 +178,42 @@ class TwigExtension extends AbstractExtension {
       $attributes = $attributes->toArray();
     }
     if (array_intersect_key($options, array_flip(static::BREAKPOINT_KEYS))) {
-      return static::responsiveRender($mixed, $options, $alt, $title, $attributes);
+      $build = static::responsiveRender($mixed, $options, $alt, $title, $attributes);
     }
-    return static::singleStyleRender($mixed, $options, $alt, $title, $attributes);
+    else {
+      $build = static::singleStyleRender($mixed, $options, $alt, $title, $attributes);
+    }
+    // Both shapes answer a render array whose theme hook declares `priority`,
+    // so the option becomes that variable whichever shape was chosen. Set only
+    // when the caller said something, so a render that never mentioned it
+    // answers the array it always answered; an empty answer stays empty.
+    if ($priority !== NULL && $build) {
+      $build['#priority'] = $priority;
+    }
+    return $build;
+  }
+
+  /**
+   * Lifts the `priority` option out of a set of options.
+   *
+   * @param mixed $options
+   *   The options the Twig function was handed, by reference. When it is an
+   *   array holding a `priority` key, the key is removed. Anything else is
+   *   left exactly as it arrived.
+   *
+   * @return bool|null
+   *   TRUE or FALSE when the options named a priority — any other value is
+   *   cast — and NULL when they named none, or named it NULL.
+   *
+   * @see \Drupal\neo_image\NeoImagePriority::claim()
+   */
+  protected static function priorityOption(&$options) {
+    if (!is_array($options) || !array_key_exists('priority', $options)) {
+      return NULL;
+    }
+    $priority = $options['priority'];
+    unset($options['priority']);
+    return $priority === NULL ? NULL : (bool) $priority;
   }
 
   /**
@@ -273,7 +313,8 @@ class TwigExtension extends AbstractExtension {
    * @param mixed $options
    *   The image options, as the dispatch documents them: effect-keyed
    *   dimensions or breakpoint options, with a non-array accepted and
-   *   ignored.
+   *   ignored. `priority: true` beside either shape marks the page's likely
+   *   largest contentful paint; see NeoImagePriority.
    * @param string|\Stringable|null $alt
    *   The alt text: a string, a stringable — a `|t` in a template is the live
    *   case — or NULL, which `neo_toolbar` passes explicitly at two call
@@ -309,7 +350,8 @@ class TwigExtension extends AbstractExtension {
    * @param mixed $options
    *   The image options, as the dispatch documents them: effect-keyed
    *   dimensions or breakpoint options, with a non-array accepted and
-   *   ignored.
+   *   ignored. `priority: true` beside either shape marks the page's likely
+   *   largest contentful paint; see NeoImagePriority.
    * @param string|\Stringable|null $alt
    *   The alt text: a string, a stringable — a `|t` in a template is the live
    *   case — or NULL, which `neo_toolbar` passes explicitly at two call
